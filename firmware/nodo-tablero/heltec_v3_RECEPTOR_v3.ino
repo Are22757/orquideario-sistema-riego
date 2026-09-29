@@ -46,7 +46,7 @@ const char* WIFI_SSID     = "red";
 const char* WIFI_PASSWORD = "contraseña";
 
 // ----- MQTT ------------------------------------------------
-const char* MQTT_BROKER   = "IP de PC con Node-RED";  // IP de tu PC con Node-RED (hotspot personal)
+const char* MQTT_BROKER   = "IP de PC";  // IP de PC con Node-RED (hotspot personal)
 const int   MQTT_PORT     = 1883;
 const char* MQTT_CLIENT   = "HeltecReceptor";
 
@@ -56,19 +56,18 @@ const char* MQTT_CLIENT   = "HeltecReceptor";
 // en el Monitor Serial (ver campo "Datos" al recibir cada paquete).
 #define NUM_SENSORES 6
 const char* SENSOR_IDS[NUM_SENSORES] = {
-  "ID010000",  // Sensor 1
-  "ID020000",  // Sensor 2
-  "ID030000",  // Sensor 3
-  "ID040000",  // Sensor 4
-  "ID050000",  // Sensor 5
-  "ID060000"   // Sensor 6
+  "ID012101",  // Sensor 1
+  "ID012129",  // Sensor 2
+  "ID012097",  // Sensor 3
+  "ID012127",  // Sensor 4
+  "ID010000",  // Sensor 5  Se hizo el cambio del ID012107 (Sensor 5 UVG) al ID010000 (Sensor pruebas de Lis)
+  "ID012096"   // Sensor 6
 };
 
-// Tópico base — se arma dinámicamente como invernadero/sensor/N
-// (el "/" antes de N es necesario para que Node-RED pueda suscribirse
-// a los 6 con un solo comodín: invernadero/sensor/+)
-const char* TOPIC_BASE    = "invernadero/sensor/";
-const char* TOPIC_RAW     = "invernadero/raw";  // string completo sin parsear (debug)
+// Tópico base — se arma dinámicamente como orquideario/lora/N
+// (coincide con el tópico que ya espera tu flujo de producción en Node-RED)
+const char* TOPIC_BASE    = "orquideario/lora/";
+const char* TOPIC_RAW     = "orquideario/raw";  // string completo sin parsear (debug)
 
 // ============================================================
 
@@ -194,7 +193,7 @@ int buscarNumeroSensor(String id) {
 // ------------------------------------------------------------
 // Publica los datos parseados en un tópico JSON individual por sensor
 // Formato del sensor: "ID010000 REPLY : SOIL INEDX:181 H:61.78 T:22.48 ADC:879 BAT:927"
-// Tópico resultante: invernadero/sensor/1, invernadero/sensor/2, ...
+// Tópico resultante: orquideario/lora/1, orquideario/lora/2, ...
 // Payload: {"id":"ID010000","soil":181,"hum":61.78,"temp":22.48,"bat":927,"rssi":-42,"snr":9.5}
 void publicarMQTT(String datos) {
   if (!mqtt.connected()) {
@@ -218,7 +217,9 @@ void publicarMQTT(String datos) {
   }
 
   // Parsea las variables del sensor
-  String soil = extraerCampo(datos, "INEDX:");   // humedad suelo
+  // NOTA: "INEDX" es solo un contador de secuencia del sensor, no humedad real.
+  // El campo que sí varía con la humedad del sustrato es "ADC".
+  String soil = extraerCampo(datos, "ADC:");      // humedad suelo (dato real, calibrar sobre este)
   String hum  = extraerCampo(datos, "H:");        // humedad aire
   String temp = extraerCampo(datos, "T:");        // temperatura
   String bat  = extraerCampo(datos, "BAT:");      // batería
@@ -254,7 +255,7 @@ void actualizarPantalla() {
     display.drawStr(45, 50, "...");
   } else {
     // Muestra humedad suelo y temperatura en líneas separadas
-    String soil = extraerCampo(ultimo.datos, "INEDX:");
+    String soil = extraerCampo(ultimo.datos, "ADC:");
     String hum  = extraerCampo(ultimo.datos, "H:");
     String temp = extraerCampo(ultimo.datos, "T:");
 
