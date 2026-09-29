@@ -1,7 +1,7 @@
 // ============================================================
 //  Heltec WiFi LoRa 32 V3  —  TRANSMISOR relay (v3)
 //  Recibe datos del Makerfabs Soil Moisture Sensor (SX1276)
-//  y los retransmite al Heltec V3 Receptor con prefijo "HLT:"0
+//  y los retransmite al Heltec V3 Receptor con prefijo "HLT:"
 //
 //  Escenario:
 //    Makerfabs Sensor → (LoRa SF9 CR4/7) → [este nodo]
@@ -130,21 +130,66 @@ void pantallaError(String msg) {
 }
 
 // ------------------------------------------------------------
-void escucharSensor() {
-  radio.begin(SENSOR_FREQ, SENSOR_BW, SENSOR_SF, SENSOR_CR,
-              SENSOR_SW, SENSOR_PWR, SENSOR_PRE);
+// Reconfigura el radio al modo "escuchar sensores".
+// Solo toca los parámetros que realmente difieren del modo receptor
+// (Coding Rate, potencia, preámbulo) — evita un radio.begin() completo,
+// que reinicializa el chip entero y crea una ventana "ciega" larga
+// durante la cual se pierden paquetes de los sensores.
+void configurarModoSensor() {
+  radio.setCodingRate(SENSOR_CR);
+  radio.setOutputPower(SENSOR_PWR);
+  radio.setPreambleLength(SENSOR_PRE);
+  radio.setCRC(true);   // los paquetes del sensor sí deben validarse con CRC
+
   radio.setDio1Action(alRecibirPaquete);
   radio.startReceive();
 }
 
 // ------------------------------------------------------------
+// Reconfigura el radio al modo "hablar con el Receptor".
+// Mismo criterio: solo cambia lo que es distinto (CR, potencia, preámbulo).
+void configurarModoReceptor() {
+  radio.setDio1Action(NULL);
+  radio.setCodingRate(RX_CR);
+  radio.setOutputPower(RX_PWR);
+  radio.setPreambleLength(RX_PRE);
+  radio.setCRC(false);  // el Receptor espera los paquetes sin CRC (ver firmware Receptor)
+}
+
+// ------------------------------------------------------------
+// Verifica que el paquete tenga la forma esperada de un sensor Makerfabs
+// ("IDxxxxxx REPLY : SOIL INEDX:... H:... T:... BAT:...") y que todos sus
+// caracteres sean texto imprimible. Sirve para detectar paquetes corruptos
+// por colisión entre sensores (dos transmitiendo casi al mismo tiempo),
+// que a veces igual pasan la validación CRC del radio pero traen basura.
+bool esPaqueteValido(String datos) {
+  if (datos.length() < 20 || datos.length() > 150) return false;
+  if (!datos.startsWith("ID")) return false;
+  if (datos.indexOf("REPLY") < 0)   return false;
+  if (datos.indexOf("INEDX:") < 0)  return false;
+  if (datos.indexOf("H:") < 0)      return false;
+  if (datos.indexOf("T:") < 0)      return false;
+  if (datos.indexOf("BAT:") < 0)    return false;
+
+  // Todos los caracteres deben ser imprimibles (ASCII 32-126)
+  for (int i = 0; i < (int)datos.length(); i++) {
+    char c = datos.charAt(i);
+    if (c < 32 || c > 126) return false;
+  }
+
+  return true;
+}
+
+// ------------------------------------------------------------
+void escucharSensor() {
+  configurarModoSensor();
+}
+
+// ------------------------------------------------------------
 void transmitirAlReceptor(String datos) {
   transmitiendo = true;
-  radio.setDio1Action(NULL);
 
-  radio.begin(RX_FREQ, RX_BW, RX_SF, RX_CR,
-              RX_SW, RX_PWR, RX_PRE);
-  radio.setCRC(0);
+  configurarModoReceptor();
 
   // Agrega prefijo para que el receptor identifique el origen
   String payload = String(PREFIJO) + datos;
@@ -218,6 +263,16 @@ void loop() {
 
       ultimo.rssi   = radio.getRSSI();
       ultimo.snr    = radio.getSNR();
+
+      if (!esPaqueteValido(datos)) {
+        Serial.println("[RX] Paquete con formato invalido - descartado (posible colision entre sensores).");
+        Serial.println("  Datos crudos (no reenviado): " + datos);
+        Serial.print  ("  RSSI  : "); Serial.print(ultimo.rssi); Serial.println(" dBm");
+        Serial.print  ("  SNR   : "); Serial.print(ultimo.snr);  Serial.println(" dB");
+        escucharSensor();
+        return;
+      }
+
       ultimo.datos  = datos;
       ultimo.cuenta++;
 
