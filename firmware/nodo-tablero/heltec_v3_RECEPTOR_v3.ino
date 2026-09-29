@@ -42,11 +42,11 @@
 #define PREFIJO "HLT:"
 
 // ----- WiFi ------------------------------------------------
-const char* WIFI_SSID     = "Lis";
-const char* WIFI_PASSWORD = "misdatos";
+const char* WIFI_SSID     = "red";
+const char* WIFI_PASSWORD = "contraseña";
 
 // ----- MQTT ------------------------------------------------
-const char* MQTT_BROKER   = "172.20.10.2";  // IP de tu PC con Node-RED (hotspot personal)
+const char* MQTT_BROKER   = "IP de PC con Node-RED";  // IP de tu PC con Node-RED (hotspot personal)
 const int   MQTT_PORT     = 1883;
 const char* MQTT_CLIENT   = "HeltecReceptor";
 
