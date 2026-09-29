@@ -1,0 +1,2601 @@
+[
+    {
+        "id": "4775d1f74d9a16af",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "name": "Chequear alertas LoRa",
+        "func": "const sensorId = msg.sensorId;\nif (!sensorId) return null;\n\nconst datos = msg.payload[sensorId];\nif (!datos) return null;\n\nconst limiteSup = global.get('limiteSupHumSustrato');\nconst limiteInf = global.get('limiteInfHumSustrato');\n\n// Cooldown propio para no repetir la misma alerta a cada rato.\n// Independiente de tiempoEnfriamientoMin (ese es para el riego automático, no para avisos).\nconst COOLDOWN_MIN = 30;\n\nlet alertasEnviadas = global.get('alertasEnviadas') || {};\nconst ahora = Date.now();\n\nfunction yaEnviada(tipo) {\n    const key = sensorId + '_' + tipo;\n    const ultima = alertasEnviadas[key];\n    return ultima && (ahora - ultima) < COOLDOWN_MIN * 60 * 1000;\n}\n\nfunction marcarEnviada(tipo) {\n    alertasEnviadas[sensorId + '_' + tipo] = ahora;\n    global.set('alertasEnviadas', alertasEnviadas);\n}\n\nfunction fechaHora() {\n    return new Date(ahora).toLocaleString('es-GT', {\n        timeZone: 'America/Guatemala',\n        dateStyle: 'short',\n        timeStyle: 'medium'\n    });\n}\n\nlet mensajes = [];\n\nif (typeof datos.humedad === 'number') {\n    if (datos.humedad > limiteSup && !yaEnviada('humedad_alta')) {\n        mensajes.push(`⚠️ Sensor ${sensorId}: humedad de sustrato ALTA (${datos.humedad}%, límite ${limiteSup}%)\\n ${fechaHora()}`);\n        marcarEnviada('humedad_alta');\n    } else if (datos.humedad < limiteInf && !yaEnviada('humedad_baja')) {\n        mensajes.push(`⚠️ Sensor ${sensorId}: humedad de sustrato BAJA (${datos.humedad}%, límite ${limiteInf}%)\\n ${fechaHora()}`);\n        marcarEnviada('humedad_baja');\n    }\n}\n\nif (datos.bateriaBaja && !yaEnviada('bateria_baja')) {\n    mensajes.push(`🔋 Sensor ${sensorId}: batería baja (${datos.bateria}%)\\n ${fechaHora()}`);\n    marcarEnviada('bateria_baja');\n}\n\nif (mensajes.length === 0) return null;\n\nreturn [mensajes.map(texto => ({\n    payload: { chatId: 8444938703, type: 'message', content: texto }\n}))];",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2330,
+        "y": 1420,
+        "wires": [
+            [
+                "telegram-send"
+            ]
+        ]
+    },
+    {
+        "id": "18a51fae157ea0ec",
+        "type": "link in",
+        "z": "2ac18697561110b7",
+        "name": "link in 1",
+        "links": [
+            "0806c7e98304da18"
+        ],
+        "x": 2135,
+        "y": 1420,
+        "wires": [
+            [
+                "4775d1f74d9a16af"
+            ]
+        ]
+    },
+    {
+        "id": "6108268d698a894b",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "sbg_comment01",
+            "sbg_template01"
+        ],
+        "x": 94,
+        "y": 419,
+        "w": 552,
+        "h": 162
+    },
+    {
+        "id": "sbg_comment01",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "6108268d698a894b",
+        "name": "Página 1 - SIDEBAR GLOBAL v3 — navegación por hash (sin backend)",
+        "info": "Reemplaza el nodo anterior 'Sidebar Global (componente único)' (mismo id, Node-RED te preguntará si reemplazar). Borra también los nodos que ya no se usan: 'GET /agro-nav', 'Procesar navegación', http response, 'Router de navegación' y sus debugs asociados.\n\nIMPORTANTE — antes de dar esto por terminado: los números en 'data-hash' de cada item (abajo, en el HTML) son un PLACEHOLDER basado en el orden en que se crearon las 7 pestañas nuevas (Resumen=1, Sensores LoRa=2, Sensor Ambiental=3, Alertas=4, Historial=5, Mapa=6, Configuración=7). Verifica navegando manualmente con el menú por defecto de Dashboard (el ícono de hamburguesa arriba a la izquierda si está visible, o probando #!/1, #!/2... en la URL) y corrige los números si no coinciden.",
+        "x": 370,
+        "y": 460,
+        "wires": []
+    },
+    {
+        "id": "sbg_template01",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "6108268d698a894b",
+        "group": "group_resumen_v2",
+        "name": "Sidebar Global (componente único)",
+        "order": 0,
+        "width": 0,
+        "height": 0,
+        "format": "<style>\n:root{\n  --sb-accent:#26c6da;\n  --sb-accent-soft:rgba(38,198,218,.12);\n  --sb-accent-border:rgba(38,198,218,.4);\n  --sb-bg:#0d0d10;\n  --sb-border:#24242b;\n  --sb-text-dim:#9098a3;\n  --sb-text:#e8eaed;\n}\n#agro-sidebar{\n  position:fixed !important; top:0 !important; left:0 !important;\n  width:240px !important; height:100vh !important;\n  background:var(--sb-bg); border-right:1px solid var(--sb-border);\n  display:flex !important; flex-direction:column; z-index:99999 !important;\n  font-family:Arial, sans-serif;\n}\n#agro-sidebar .logo-row{display:flex; align-items:center; gap:10px; padding:20px 18px;}\n#agro-sidebar .logo-text .line1{color:white; font-weight:700; font-size:14px; letter-spacing:.5px;}\n#agro-sidebar .logo-text .line2{color:var(--sb-accent); font-weight:700; font-size:14px; letter-spacing:.5px;}\n#agro-sidebar .nav-item{\n  display:flex; align-items:center; gap:12px; padding:12px 18px; margin:2px 10px;\n  border-radius:8px; color:var(--sb-text-dim); cursor:pointer; font-size:14px;\n  transition:all .15s ease; border:1px solid transparent;\n}\n#agro-sidebar .nav-item:hover{background:var(--sb-accent-soft); color:var(--sb-text);}\n#agro-sidebar .nav-item.active{\n  background:var(--sb-accent-soft); border:1px solid var(--sb-accent-border);\n  color:var(--sb-accent); font-weight:600;\n}\n#agro-sidebar .nav-icon{width:8px; height:8px; border-radius:50%; background:currentColor; opacity:.6;}\n#agro-sidebar .nav-item.active .nav-icon{opacity:1;}\n#agro-sidebar .spacer{flex:1;}\n#agro-sidebar .status-card{margin:14px; padding:12px; border:1px solid var(--sb-border); border-radius:10px; background:rgba(38,198,218,.04);}\n#agro-sidebar .status-dot{width:8px; height:8px; border-radius:50%; background:#4caf50; display:inline-block; margin-right:6px; box-shadow:0 0 6px #4caf50;}\n#agro-sidebar .status-title{color:var(--sb-text); font-size:12px; font-weight:600;}\n#agro-sidebar .status-sub{color:#6b7a70; font-size:11px; margin-top:6px;}\nbody{margin-left:240px !important;}\n</style>\n\n<div id=\"agro-sidebar\">\n  <div class=\"logo-row\">\n    <div class=\"logo-text\">\n      <div class=\"line1\">MONITOREO</div>\n      <div class=\"line2\">ORQUIDEARIO UVG</div>\n    </div>\n  </div>\n\n  <div class=\"nav-item\" data-hash=\"0\"><span class=\"nav-icon\"></span> Resumen</div>\n  <div class=\"nav-item\" data-hash=\"1\"><span class=\"nav-icon\"></span> Sensores LoRa</div>\n  <div class=\"nav-item\" data-hash=\"2\"><span class=\"nav-icon\"></span> Sensor Ambiental</div>\n  <div class=\"nav-item\" data-hash=\"3\"><span class=\"nav-icon\"></span> Alertas</div>\n  <div class=\"nav-item\" data-hash=\"4\"><span class=\"nav-icon\"></span> Historial</div>\n  <div class=\"nav-item\" data-hash=\"5\"><span class=\"nav-icon\"></span> Mapa de Sensores</div>\n  <div class=\"nav-item\" data-hash=\"6\"><span class=\"nav-icon\"></span> Configuración</div>\n\n  <div class=\"spacer\"></div>\n\n  <div class=\"status-card\">\n    <span class=\"status-dot\"></span><span class=\"status-title\">Sistema conectado</span>\n    <div class=\"status-sub\" id=\"agro-last-update\">Última actualización: --</div>\n  </div>\n</div>\n\n<script>\n(function(){\n\n  if (window.__agroSidebarInit) { window.__agroSidebarSync && window.__agroSidebarSync(); return; }\n  window.__agroSidebarInit = true;\n\n  var sidebarEl = document.getElementById('agro-sidebar');\n  if (sidebarEl && sidebarEl.parentElement !== document.body) {\n    document.body.appendChild(sidebarEl);\n  }\n\n  document.addEventListener('click', function(e){\n    var item = e.target.closest && e.target.closest('.nav-item');\n    if(!item) return;\n    var hashIdx = item.getAttribute('data-hash');\n    document.querySelectorAll('#agro-sidebar .nav-item').forEach(function(n){ n.classList.remove('active'); });\n    item.classList.add('active');\n    window.location.hash = '#!/' + hashIdx;\n  });\n\n  function syncActiveFromHash(){\n    var current = window.location.hash.replace('#!/', '').split('?')[0];\n    document.querySelectorAll('#agro-sidebar .nav-item').forEach(function(n){\n      n.classList.toggle('active', n.getAttribute('data-hash') === current);\n    });\n  }\n  window.__agroSidebarSync = syncActiveFromHash;\n  window.addEventListener('hashchange', syncActiveFromHash);\n  syncActiveFromHash();\n\n  function tick(){\n    var el = document.getElementById('agro-last-update');\n    if(el){ el.textContent = 'Última actualización: ' + new Date().toLocaleTimeString(); }\n  }\n  tick();\n  setInterval(tick, 1000);\n\n})();\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "global",
+        "className": "",
+        "x": 380,
+        "y": 540,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "group_resumen_v2",
+        "type": "ui_group",
+        "name": "Resumen",
+        "tab": "tab_resumen_v2",
+        "order": 1,
+        "disp": false,
+        "width": 24,
+        "collapse": false
+    },
+    {
+        "id": "tab_resumen_v2",
+        "type": "ui_tab",
+        "name": "Resumen",
+        "icon": "dashboard",
+        "order": 1,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "3a99c426b8213441",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "b7a51863b6a5028d",
+            "c52ad38a8cb6c66b"
+        ],
+        "x": 108,
+        "y": 633,
+        "w": 1964,
+        "h": 874
+    },
+    {
+        "id": "b7a51863b6a5028d",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "g": "3a99c426b8213441",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "d05c9b4f3dc60cf5",
+            "12579386dd9f680c",
+            "9552bca500af01cc",
+            "73faf3c6ac0497dd",
+            "b8649b811e9e88d9",
+            "93b108e3fa6e0c9a",
+            "473455f35d3e118e",
+            "3830b1c48c734ee8",
+            "336e3345ab597536",
+            "2a791c1a7e9736ef",
+            "panel_lora_v1",
+            "gauge_nativo_v1"
+        ],
+        "x": 394,
+        "y": 659,
+        "w": 1652,
+        "h": 422
+    },
+    {
+        "id": "d05c9b4f3dc60cf5",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "name": "Página 2 — Sensores LoRa (contenido real)",
+        "info": "Borra el nodo placeholder 'Encabezado Sensores LoRa' (el texto 'contenido pendiente'), ya no hace falta. Este flujo REEMPLAZA los nodos 'Parsear sensor LoRa → flow.sensoresLora' y 'Promedio de humedad (sustrato)' del archivo 2 (mismos ids, se sobrescriben con nuevas conexiones) — no los borres, se actualizan solos al importar.",
+        "x": 1850,
+        "y": 700,
+        "wires": []
+    },
+    {
+        "id": "12579386dd9f680c",
+        "type": "ui_switch",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "name": "Modo simulación (temporal, se moverá a Configuración)",
+        "label": "Modo simulación (datos de prueba)",
+        "tooltip": "",
+        "group": "group_lora_v2",
+        "order": 12,
+        "width": 0,
+        "height": 0,
+        "passthru": false,
+        "decouple": "false",
+        "topic": "modoSimulacion",
+        "topicType": "str",
+        "style": "",
+        "onvalue": "true",
+        "onvalueType": "bool",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "false",
+        "offvalueType": "bool",
+        "officon": "",
+        "offcolor": "",
+        "x": 630,
+        "y": 1040,
+        "wires": [
+            [
+                "9552bca500af01cc"
+            ]
+        ]
+    },
+    {
+        "id": "9552bca500af01cc",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "name": "Guardar flow.modoSimulacion",
+        "func": "global.set('modoSimulacion', msg.payload === true);\nreturn null;",
+        "outputs": 0,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 910,
+        "y": 1040,
+        "wires": []
+    },
+    {
+        "id": "73faf3c6ac0497dd",
+        "type": "link in",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "name": "link in 6",
+        "links": [
+            "0806c7e98304da18"
+        ],
+        "x": 565,
+        "y": 720,
+        "wires": [
+            [
+                "473455f35d3e118e"
+            ]
+        ]
+    },
+    {
+        "id": "b8649b811e9e88d9",
+        "type": "link in",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "name": "link in 9",
+        "links": [
+            "0806c7e98304da18"
+        ],
+        "x": 465,
+        "y": 940,
+        "wires": [
+            [
+                "93b108e3fa6e0c9a"
+            ]
+        ]
+    },
+    {
+        "id": "93b108e3fa6e0c9a",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "name": "Guardar historial para gráfica",
+        "func": "const sensores = msg.payload;\nconst id = msg.sensorId;\nif (!id || !sensores[id]) return null;\n\nconst ahora = Date.now();\nconst ventanaMs = 60 * 60 * 1000;\n\nlet historial = global.get('historialGraficaLora') || {};\nlet arr = historial[id] || [];\n\narr.push({ t: ahora, v: sensores[id].humedad });\narr = arr.filter(function(p){ return (ahora - p.t) <= ventanaMs; });\nif (arr.length > 300) arr = arr.slice(arr.length - 300);\n\nhistorial[id] = arr;\nglobal.set('historialGraficaLora', historial);\nreturn null;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 690,
+        "y": 940,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "473455f35d3e118e",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "name": "Promedio de humedad (sustrato)",
+        "func": "const sensores = global.get('sensoresLora') || {};\nconst valores = Object.values(sensores)\n    .map(s => s.humedad)\n    .filter(v => typeof v === 'number' && !isNaN(v));\n\nif (valores.length === 0) return null;\n\nconst promedio = valores.reduce((a, b) => a + b, 0) / valores.length;\n\nmsg.payload = Math.round(promedio * 10) / 10;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 800,
+        "y": 760,
+        "wires": [
+            [
+                "336e3345ab597536",
+                "3830b1c48c734ee8",
+                "gauge_nativo_v1"
+            ]
+        ]
+    },
+    {
+        "id": "3830b1c48c734ee8",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "name": "Consolidar datos — panel LoRa",
+        "func": "msg.payload = {\n    sensores: global.get('sensoresLora') || {},\n    historialPromedio: global.get('historialGraficaPromedio') || [],\n    historialSensores: global.get('historialGraficaLora') || {},\n    limiteInf: global.get('limiteInfHumSustrato'),\n    limiteSup: global.get('limiteSupHumSustrato')\n};\nif (typeof msg.payload.limiteInf !== 'number') msg.payload.limiteInf = 25;\nif (typeof msg.payload.limiteSup !== 'number') msg.payload.limiteSup = 70;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1350,
+        "y": 740,
+        "wires": [
+            [
+                "panel_lora_v1"
+            ]
+        ]
+    },
+    {
+        "id": "336e3345ab597536",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "name": "Guardar historial del promedio",
+        "func": "const promedio = msg.payload;\nconst ahora = Date.now();\nconst ventanaMs = 60 * 60 * 1000;\n\nlet arr = global.get('historialGraficaPromedio') || [];\narr.push({ t: ahora, v: promedio });\narr = arr.filter(function(p){ return (ahora - p.t) <= ventanaMs; });\nif (arr.length > 300) arr = arr.slice(arr.length - 300);\n\nglobal.set('historialGraficaPromedio', arr);\nreturn null;",
+        "outputs": 0,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1350,
+        "y": 860,
+        "wires": []
+    },
+    {
+        "id": "2a791c1a7e9736ef",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "group": "group_lora_v2",
+        "name": "Espaciador (antes del gauge nativo)",
+        "order": 2,
+        "width": 8,
+        "height": 2,
+        "format": "",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 1030,
+        "y": 980,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "panel_lora_v1",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "group": "group_lora_v2",
+        "name": "Panel combinado — Sensores LoRa",
+        "order": 11,
+        "width": 24,
+        "height": 24,
+        "format": "<style>\n.pnl-root{ font-family:Arial, sans-serif; display:grid; grid-template-columns: max-content 1fr; gap:24px; align-items:start; }\n@media (max-width: 900px){ .pnl-root{ grid-template-columns: 1fr; } }\n\n.pnl-frame{\n  border:1px solid rgba(255,255,255,0.16);\n  background:rgba(255,255,255,0.035);\n  border-radius:14px;\n  padding:16px;\n}\n.pnl-cards-grid{\n  display:grid; grid-template-columns: repeat(2, minmax(120px, 148px)); gap:12px;\n  justify-content:start;\n}\n.pnl-card{\n  position:relative; overflow:hidden;\n  background:#15151a; border:1px solid #24242b; border-radius:10px; padding:11px;\n  min-height:158px; box-sizing:border-box;\n}\n.pnl-card-icono{ position:absolute; top:8px; right:8px; line-height:0; }\n.pnl-card-header{ color:#9aa5ac; font-size:10px; letter-spacing:.4px; text-transform:uppercase; margin-bottom:2px; position:relative; }\n.pnl-card-id{ color:#5c6470; font-size:8px; margin-bottom:7px; min-height:10px; position:relative; }\n.pnl-card-value{ color:#e8eaed; font-size:21px; font-weight:700; margin-bottom:8px; position:relative; }\n.pnl-card-value .unit{ font-size:12px; font-weight:400; color:#26c6da; margin-left:1px; }\n.pnl-card-bat-label{ display:flex; justify-content:space-between; color:#9aa5ac; font-size:8px; text-transform:uppercase; margin-bottom:3px; position:relative; }\n.pnl-card-bat-label .valor{ color:#e8eaed; font-size:10px; font-weight:700; }\n.pnl-bat-bar{ height:4px; background:rgba(255,255,255,.08); border-radius:3px; overflow:hidden; margin-bottom:7px; position:relative; }\n.pnl-bat-fill{ height:100%; border-radius:3px; }\n.pnl-card-footer{ color:#6b7280; font-size:9px; position:relative; }\n\n.pnl-right{ display:flex; flex-direction:column; gap:18px; }\n.pnl-block-title{ color:#9aa5ac; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:8px; }\n\n.pnl-gauge-wrap{ display:flex; flex-direction:column; align-items:center; }\n.pnl-gauge-valor{ color:#e8eaed; font-size:30px; font-weight:700; margin-top:-40px; }\n.pnl-gauge-valor .unit{ font-size:14px; color:#26c6da; font-weight:400; }\n.pnl-gauge-pill{ margin-top:8px; padding:4px 16px; border-radius:20px; font-size:10px; font-weight:700; letter-spacing:.6px; text-transform:uppercase; }\n\n.pnl-chart-wrap{ position:relative; }\n.pnl-legend{ display:flex; flex-wrap:wrap; gap:12px; margin-bottom:6px; }\n.pnl-legend-item{ display:flex; align-items:center; gap:5px; color:#9aa5ac; font-size:11px; }\n.pnl-legend-dot{ width:8px; height:8px; border-radius:2px; }\n.pnl-empty{ color:#6b7280; font-size:12px; padding:20px; text-align:center; }\n.pnl-tooltip{\n  position:absolute; display:none; pointer-events:none; z-index:10;\n  background:#0d0d10; border:1px solid #24242b; border-radius:8px;\n  padding:7px 9px; font-size:10px; color:#e8eaed; white-space:nowrap;\n  box-shadow:0 4px 12px rgba(0,0,0,.4);\n}\n.pnl-tooltip .tt-time{ color:#9aa5ac; font-size:9px; margin-bottom:3px; }\n.pnl-tooltip .tt-row{ display:flex; align-items:center; gap:5px; margin-top:1px; }\n.pnl-tooltip .tt-dot{ width:6px; height:6px; border-radius:2px; flex-shrink:0; }\n</style>\n\n<div class=\"pnl-root\">\n\n  <div class=\"pnl-frame\">\n    <div class=\"pnl-cards-grid\" id=\"pnl-cards\"></div>\n  </div>\n\n  <div class=\"pnl-right\">\n\n    <div>\n      <div class=\"pnl-block-title\">Tendencia del promedio</div>\n      <div class=\"pnl-chart-wrap\" id=\"pnl-tendencia-wrap\">\n        <svg id=\"pnl-tend-svg\" width=\"100%\" viewBox=\"0 0 1000 230\" preserveAspectRatio=\"none\" style=\"display:block; cursor:crosshair;\"></svg>\n        <div class=\"pnl-empty\" id=\"pnl-tend-empty\" style=\"display:none;\">Esperando datos...</div>\n        <div class=\"pnl-tooltip\" id=\"pnl-tend-tooltip\"></div>\n      </div>\n    </div>\n\n    <div>\n      <div class=\"pnl-block-title\">Sensores individuales</div>\n      <div class=\"pnl-legend\" id=\"pnl-sens-legend\"></div>\n      <div class=\"pnl-chart-wrap\" id=\"pnl-sensores-wrap\">\n        <svg id=\"pnl-sens-svg\" width=\"100%\" viewBox=\"0 0 1000 300\" preserveAspectRatio=\"none\" style=\"display:block; cursor:crosshair;\"></svg>\n        <div class=\"pnl-empty\" id=\"pnl-sens-empty\" style=\"display:none;\">Esperando datos...</div>\n        <div class=\"pnl-tooltip\" id=\"pnl-sens-tooltip\"></div>\n      </div>\n    </div>\n\n  </div>\n</div>\n\n<script>\n(function(scope){\n\n  var COLORES = {\n    \"1\": \"#26c6da\", \"2\": \"#4caf50\", \"3\": \"#ffca28\",\n    \"4\": \"#ff8a65\", \"5\": \"#ba68c8\", \"6\": \"#90a4ae\"\n  };\n  var COLOR_BANDA = \"#5ec8f0\";\n\n  // Silueta de la sonda: mas ancha, relleno blanco solido (sin opacidad reducida)\n  var SILUETA_SENSOR = '<svg width=\"24\" height=\"58\" viewBox=\"0 0 26 128\" xmlns=\"http://www.w3.org/2000/svg\">' +\n    '<rect x=\"6\" y=\"17\" width=\"8\" height=\"18\" rx=\"3\" ry=\"3\" style=\"fill:#ffffff !important;\"/>' +\n    '<path d=\"M4 33 L22 33 L22 68 L20 68 L20 76 L17 76 L17 108 L13 122 L9 108 L9 76 L6 76 L6 68 L4 68 Z\" ' +\n    'style=\"fill:#ffffff !important; stroke:none !important;\"/>' +\n    '</svg>';\n\n  function fmtHora(ts){\n    var d = new Date(ts);\n    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0') + ':' + String(d.getSeconds()).padStart(2,'0');\n  }\n  function batteryColor(pct){\n    if (pct === null || pct === undefined) return '#4caf50';\n    if (pct > 50) return '#4caf50';\n    if (pct > 20) return '#ffca28';\n    return '#e57373';\n  }\n\n  function renderCards(sensores){\n    var cont = document.getElementById('pnl-cards');\n    var ids = Object.keys(sensores || {}).sort(function(a,b){ return Number(a) - Number(b); });\n    var html = '';\n    ids.forEach(function(id){\n      var s = sensores[id];\n      var secs = s.ultimaLectura ? Math.round((Date.now() - s.ultimaLectura) / 1000) : null;\n      var footer = secs !== null ? ('Actualizado hace ' + secs + 's') : 'Sin datos aún';\n      var bateria = (s.bateria !== null && s.bateria !== undefined) ? Math.round(s.bateria) : null;\n      var idLinea = s.idHardware ? s.idHardware : '&nbsp;';\n      html += '<div class=\"pnl-card\">' +\n        '<div class=\"pnl-card-icono\">' + SILUETA_SENSOR + '</div>' +\n        '<div class=\"pnl-card-header\">Sensor ' + id + '</div>' +\n        '<div class=\"pnl-card-id\">' + idLinea + '</div>' +\n        '<div class=\"pnl-card-value\">' + (s.humedad !== undefined && s.humedad !== null ? s.humedad.toFixed(1) : '--') + '<span class=\"unit\">%</span></div>' +\n        '<div class=\"pnl-card-bat-label\"><span>Bateria</span><span class=\"valor\">' + (bateria !== null ? bateria + '%' : '--') + '</span></div>' +\n        '<div class=\"pnl-bat-bar\"><div class=\"pnl-bat-fill\" style=\"width:' + (bateria || 0) + '%; background:' + batteryColor(bateria) + '\"></div></div>' +\n        '<div class=\"pnl-card-footer\">' + footer + '</div>' +\n      '</div>';\n    });\n    cont.innerHTML = html;\n  }\n\n  var estadoTend = null;\n  function renderTendencia(puntos, limInf, limSup){\n    var svg = document.getElementById('pnl-tend-svg');\n    var emptyEl = document.getElementById('pnl-tend-empty');\n    var W = 1000, H = 230, PAD_L = 44, PAD_R = 16, PAD_T = 20, PAD_B = 24;\n\n    if (!puntos || puntos.length < 2) {\n      svg.innerHTML = ''; emptyEl.style.display = 'block'; estadoTend = null; return;\n    }\n    emptyEl.style.display = 'none';\n\n    var tMin = puntos[0].t, tMax = puntos[puntos.length - 1].t;\n    if (tMax === tMin) tMax = tMin + 1;\n    var valores = puntos.map(function(p){ return p.v; }).filter(function(v){ return typeof v === 'number'; });\n    var vMin = Math.min.apply(null, valores), vMax = Math.max.apply(null, valores);\n    if ((vMax - vMin) < 6) { var c = (vMax + vMin) / 2; vMin = Math.max(0, c - 3); vMax = Math.min(100, c + 3); }\n    var m = (vMax - vMin) * 0.15; vMin = Math.max(0, vMin - m); vMax = Math.min(100, vMax + m);\n    if (vMax === vMin) vMax = vMin + 1;\n\n    function x(t){ return PAD_L + ((t - tMin) / (tMax - tMin)) * (W - PAD_L - PAD_R); }\n    function y(v){ return (H - PAD_B) - ((v - vMin) / (vMax - vMin)) * (H - PAD_T - PAD_B); }\n    estadoTend = { puntos: puntos, tMin: tMin, tMax: tMax, x: x, y: y, PAD_L: PAD_L, PAD_R: PAD_R, W: W, H: H, PAD_T: PAD_T, PAD_B: PAD_B };\n\n    var parts = [];\n    var bTop = Math.min(limSup, vMax), bBot = Math.max(limInf, vMin);\n    if (bBot < bTop) {\n      parts.push('<rect x=\"' + PAD_L + '\" y=\"' + y(bTop) + '\" width=\"' + (W-PAD_L-PAD_R) + '\" height=\"' + (y(bBot)-y(bTop)) + '\" fill=\"' + COLOR_BANDA + '\" opacity=\"0.20\"/>');\n    } else if (limInf > vMax) {\n      parts.push('<text x=\"' + (W-PAD_R) + '\" y=\"13\" text-anchor=\"end\" fill=\"' + COLOR_BANDA + '\" font-size=\"10\">Banda optima ' + limInf + '-' + limSup + '% &#8593;</text>');\n    } else if (limSup < vMin) {\n      parts.push('<text x=\"' + (W-PAD_R) + '\" y=\"13\" text-anchor=\"end\" fill=\"' + COLOR_BANDA + '\" font-size=\"10\">Banda optima ' + limInf + '-' + limSup + '% &#8595;</text>');\n    }\n    for (var i=0;i<=3;i++){\n      var val = vMin + (vMax-vMin)*(i/3), yy = y(val);\n      parts.push('<line x1=\"'+PAD_L+'\" y1=\"'+yy+'\" x2=\"'+(W-PAD_R)+'\" y2=\"'+yy+'\" stroke=\"#24242b\" stroke-width=\"1\"/>');\n      parts.push('<text x=\"'+(PAD_L-6)+'\" y=\"'+(yy+4)+'\" text-anchor=\"end\" fill=\"#6b7280\" font-size=\"10\">'+val.toFixed(0)+'%</text>');\n    }\n    for (var j=0;j<=4;j++){\n      var t = tMin + (tMax-tMin)*(j/4), xx = x(t);\n      parts.push('<text x=\"'+xx+'\" y=\"'+(H-6)+'\" text-anchor=\"middle\" fill=\"#6b7280\" font-size=\"10\">'+fmtHora(t).slice(0,5)+'</text>');\n    }\n    var coords = puntos.filter(function(p){return typeof p.v==='number';}).map(function(p){return x(p.t).toFixed(1)+','+y(p.v).toFixed(1);}).join(' ');\n    parts.push('<polyline points=\"'+coords+'\" fill=\"none\" stroke=\"#26c6da\" stroke-width=\"2.4\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>');\n    parts.push('<rect id=\"pnl-tend-hover\" x=\"'+PAD_L+'\" y=\"'+PAD_T+'\" width=\"'+(W-PAD_L-PAD_R)+'\" height=\"'+(H-PAD_T-PAD_B)+'\" fill=\"transparent\"/>');\n    parts.push('<g id=\"pnl-tend-marca\" style=\"display:none;\"></g>');\n    svg.innerHTML = parts.join('');\n  }\n\n  var estadoSens = null;\n  function renderSensores(historial, limInf, limSup){\n    var svg = document.getElementById('pnl-sens-svg');\n    var emptyEl = document.getElementById('pnl-sens-empty');\n    var legendEl = document.getElementById('pnl-sens-legend');\n    var W = 1000, H = 300, PAD_L = 44, PAD_R = 16, PAD_T = 20, PAD_B = 24;\n\n    var ids = Object.keys(historial || {}).sort(function(a,b){ return Number(a) - Number(b); });\n    var todos = [];\n    ids.forEach(function(id){ todos = todos.concat(historial[id]); });\n\n    if (todos.length < 2) {\n      svg.innerHTML = ''; emptyEl.style.display = 'block'; legendEl.innerHTML=''; estadoSens = null; return;\n    }\n    emptyEl.style.display = 'none';\n\n    var tMin = Math.min.apply(null, todos.map(function(p){return p.t;}));\n    var tMax = Math.max.apply(null, todos.map(function(p){return p.t;}));\n    if (tMax === tMin) tMax = tMin + 1;\n    var valores = todos.map(function(p){return p.v;}).filter(function(v){return typeof v==='number';});\n    var vMin = Math.min.apply(null, valores), vMax = Math.max.apply(null, valores);\n    if ((vMax - vMin) < 6) { var c=(vMax+vMin)/2; vMin=Math.max(0,c-3); vMax=Math.min(100,c+3); }\n    var m = (vMax-vMin)*0.15; vMin=Math.max(0,vMin-m); vMax=Math.min(100,vMax+m);\n    if (vMax===vMin) vMax=vMin+1;\n\n    function x(t){ return PAD_L + ((t - tMin) / (tMax - tMin)) * (W - PAD_L - PAD_R); }\n    function y(v){ return (H - PAD_B) - ((v - vMin) / (vMax - vMin)) * (H - PAD_T - PAD_B); }\n    estadoSens = { ids: ids, historial: historial, tMin: tMin, tMax: tMax, x: x, y: y, PAD_L:PAD_L, PAD_R:PAD_R, W:W, H:H, PAD_T:PAD_T, PAD_B:PAD_B };\n\n    var parts = [];\n    var bTop = Math.min(limSup, vMax), bBot = Math.max(limInf, vMin);\n    if (bBot < bTop) {\n      parts.push('<rect x=\"'+PAD_L+'\" y=\"'+y(bTop)+'\" width=\"'+(W-PAD_L-PAD_R)+'\" height=\"'+(y(bBot)-y(bTop))+'\" fill=\"' + COLOR_BANDA + '\" opacity=\"0.18\"/>');\n    } else if (limInf > vMax) {\n      parts.push('<text x=\"'+(W-PAD_R)+'\" y=\"13\" text-anchor=\"end\" fill=\"' + COLOR_BANDA + '\" font-size=\"10\">Banda optima '+limInf+'-'+limSup+'% &#8593;</text>');\n    } else if (limSup < vMin) {\n      parts.push('<text x=\"'+(W-PAD_R)+'\" y=\"13\" text-anchor=\"end\" fill=\"' + COLOR_BANDA + '\" font-size=\"10\">Banda optima '+limInf+'-'+limSup+'% &#8595;</text>');\n    }\n    for (var i=0;i<=4;i++){\n      var val = vMin + (vMax-vMin)*(i/4), yy = y(val);\n      parts.push('<line x1=\"'+PAD_L+'\" y1=\"'+yy+'\" x2=\"'+(W-PAD_R)+'\" y2=\"'+yy+'\" stroke=\"#24242b\" stroke-width=\"1\"/>');\n      parts.push('<text x=\"'+(PAD_L-6)+'\" y=\"'+(yy+4)+'\" text-anchor=\"end\" fill=\"#6b7280\" font-size=\"10\">'+val.toFixed(0)+'%</text>');\n    }\n    for (var j=0;j<=4;j++){\n      var t = tMin + (tMax-tMin)*(j/4), xx = x(t);\n      parts.push('<text x=\"'+xx+'\" y=\"'+(H-6)+'\" text-anchor=\"middle\" fill=\"#6b7280\" font-size=\"10\">'+fmtHora(t).slice(0,5)+'</text>');\n    }\n    ids.forEach(function(id){\n      var puntos = historial[id]; if (!puntos || puntos.length===0) return;\n      var color = COLORES[id] || '#9aa5ac';\n      var coords = puntos.filter(function(p){return typeof p.v==='number';}).map(function(p){return x(p.t).toFixed(1)+','+y(p.v).toFixed(1);}).join(' ');\n      parts.push('<polyline points=\"'+coords+'\" fill=\"none\" stroke=\"'+color+'\" stroke-width=\"2.2\" stroke-linejoin=\"round\" stroke-linecap=\"round\"/>');\n    });\n    parts.push('<rect id=\"pnl-sens-hover\" x=\"'+PAD_L+'\" y=\"'+PAD_T+'\" width=\"'+(W-PAD_L-PAD_R)+'\" height=\"'+(H-PAD_T-PAD_B)+'\" fill=\"transparent\"/>');\n    parts.push('<g id=\"pnl-sens-marca\" style=\"display:none;\"></g>');\n    svg.innerHTML = parts.join('');\n\n    var legendHtml = '';\n    ids.forEach(function(id){\n      var color = COLORES[id] || '#9aa5ac';\n      legendHtml += '<div class=\"pnl-legend-item\"><span class=\"pnl-legend-dot\" style=\"background:'+color+'\"></span>Sensor '+id+'</div>';\n    });\n    legendEl.innerHTML = legendHtml;\n  }\n\n  function puntoMasCercano(puntos, t){\n    var mejor = puntos[0], mejorDist = Math.abs(puntos[0].t - t);\n    for (var i=1;i<puntos.length;i++){ var d=Math.abs(puntos[i].t-t); if (d<mejorDist){mejor=puntos[i]; mejorDist=d;} }\n    return mejor;\n  }\n\n  function conectarTooltipTendencia(){\n    var svg = document.getElementById('pnl-tend-svg');\n    var wrap = document.getElementById('pnl-tendencia-wrap');\n    var tooltipEl = document.getElementById('pnl-tend-tooltip');\n\n    function onMove(evt){\n      if (!estadoTend) return;\n      var rect = svg.getBoundingClientRect();\n      var relX = (evt.clientX - rect.left) / rect.width * estadoTend.W;\n      if (relX < estadoTend.PAD_L || relX > (estadoTend.W - estadoTend.PAD_R)) { onLeave(); return; }\n      var t = estadoTend.tMin + ((relX - estadoTend.PAD_L) / (estadoTend.W - estadoTend.PAD_L - estadoTend.PAD_R)) * (estadoTend.tMax - estadoTend.tMin);\n      var p = puntoMasCercano(estadoTend.puntos, t);\n      if (!p || typeof p.v !== 'number') { onLeave(); return; }\n      var py = estadoTend.y(p.v);\n      var marca = document.getElementById('pnl-tend-marca');\n      if (marca) {\n        marca.innerHTML = '<line x1=\"'+relX.toFixed(1)+'\" y1=\"'+estadoTend.PAD_T+'\" x2=\"'+relX.toFixed(1)+'\" y2=\"'+(estadoTend.H-estadoTend.PAD_B)+'\" stroke=\"#5c6470\" stroke-width=\"1\" stroke-dasharray=\"2 2\"/>' +\n          '<circle cx=\"'+relX.toFixed(1)+'\" cy=\"'+py.toFixed(1)+'\" r=\"4\" fill=\"#26c6da\" stroke=\"#0d0d10\" stroke-width=\"1.5\"/>';\n        marca.style.display = 'block';\n      }\n      tooltipEl.innerHTML = '<div class=\"tt-time\">'+fmtHora(p.t)+'</div>'+p.v.toFixed(1)+'%';\n      tooltipEl.style.display = 'block';\n      var wr = wrap.getBoundingClientRect();\n      var left = evt.clientX - wr.left + 12, top = evt.clientY - wr.top - 10;\n      if (left + 90 > wr.width) left = evt.clientX - wr.left - 100;\n      tooltipEl.style.left = left + 'px'; tooltipEl.style.top = top + 'px';\n    }\n    function onLeave(){\n      tooltipEl.style.display = 'none';\n      var marca = document.getElementById('pnl-tend-marca');\n      if (marca) marca.style.display = 'none';\n    }\n    svg.addEventListener('mousemove', onMove);\n    svg.addEventListener('mouseleave', onLeave);\n    svg.addEventListener('touchmove', function(evt){ if (evt.touches && evt.touches[0]) onMove(evt.touches[0]); });\n    svg.addEventListener('touchend', onLeave);\n  }\n\n  function conectarTooltipSensores(){\n    var svg = document.getElementById('pnl-sens-svg');\n    var wrap = document.getElementById('pnl-sensores-wrap');\n    var tooltipEl = document.getElementById('pnl-sens-tooltip');\n\n    function onMove(evt){\n      if (!estadoSens) return;\n      var rect = svg.getBoundingClientRect();\n      var relX = (evt.clientX - rect.left) / rect.width * estadoSens.W;\n      if (relX < estadoSens.PAD_L || relX > (estadoSens.W - estadoSens.PAD_R)) { onLeave(); return; }\n      var t = estadoSens.tMin + ((relX - estadoSens.PAD_L) / (estadoSens.W - estadoSens.PAD_L - estadoSens.PAD_R)) * (estadoSens.tMax - estadoSens.tMin);\n\n      var marca = document.getElementById('pnl-sens-marca');\n      var marcaParts = ['<line x1=\"'+relX.toFixed(1)+'\" y1=\"'+estadoSens.PAD_T+'\" x2=\"'+relX.toFixed(1)+'\" y2=\"'+(estadoSens.H-estadoSens.PAD_B)+'\" stroke=\"#5c6470\" stroke-width=\"1\" stroke-dasharray=\"2 2\"/>'];\n      var filas = [];\n      estadoSens.ids.forEach(function(id){\n        var p = puntoMasCercano(estadoSens.historial[id], t);\n        if (!p || typeof p.v !== 'number') return;\n        var color = COLORES[id] || '#9aa5ac';\n        var py = estadoSens.y(p.v);\n        marcaParts.push('<circle cx=\"'+relX.toFixed(1)+'\" cy=\"'+py.toFixed(1)+'\" r=\"4\" fill=\"'+color+'\" stroke=\"#0d0d10\" stroke-width=\"1.5\"/>');\n        filas.push({id:id, v:p.v, color:color, t:p.t});\n      });\n      if (marca) { marca.innerHTML = marcaParts.join(''); marca.style.display = 'block'; }\n\n      if (filas.length > 0) {\n        var html = '<div class=\"tt-time\">'+fmtHora(filas[0].t)+'</div>';\n        filas.sort(function(a,b){ return Number(a.id)-Number(b.id); });\n        filas.forEach(function(f){ html += '<div class=\"tt-row\"><span class=\"tt-dot\" style=\"background:'+f.color+'\"></span>Sensor '+f.id+': <b>'+f.v.toFixed(1)+'%</b></div>'; });\n        tooltipEl.innerHTML = html;\n        tooltipEl.style.display = 'block';\n        var wr = wrap.getBoundingClientRect();\n        var left = evt.clientX - wr.left + 12, top = evt.clientY - wr.top - 10;\n        if (left + 150 > wr.width) left = evt.clientX - wr.left - 164;\n        tooltipEl.style.left = left + 'px'; tooltipEl.style.top = top + 'px';\n      }\n    }\n    function onLeave(){\n      tooltipEl.style.display = 'none';\n      var marca = document.getElementById('pnl-sens-marca');\n      if (marca) marca.style.display = 'none';\n    }\n    svg.addEventListener('mousemove', onMove);\n    svg.addEventListener('mouseleave', onLeave);\n    svg.addEventListener('touchmove', function(evt){ if (evt.touches && evt.touches[0]) onMove(evt.touches[0]); });\n    svg.addEventListener('touchend', onLeave);\n  }\n\n  conectarTooltipTendencia();\n  conectarTooltipSensores();\n\n  scope.$watch('msg', function(msg){\n    if (!msg || !msg.payload) return;\n    var d = msg.payload;\n    renderCards(d.sensores);\n\n    renderTendencia(d.historialPromedio, d.limiteInf, d.limiteSup);\n    renderSensores(d.historialSensores, d.limiteInf, d.limiteSup);\n  });\n\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 1710,
+        "y": 740,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "gauge_nativo_v1",
+        "type": "ui_gauge",
+        "z": "2ac18697561110b7",
+        "g": "b7a51863b6a5028d",
+        "name": "Gauge nativo — Humedad promedio",
+        "group": "group_lora_v2",
+        "order": 4,
+        "width": 8,
+        "height": 3,
+        "gtype": "gage",
+        "title": "Humedad promedio del sustrato",
+        "label": "%",
+        "format": "{{value}}",
+        "min": 0,
+        "max": 100,
+        "colors": [
+            "#e57373",
+            "#ffca28",
+            "#26c6da"
+        ],
+        "seg1": "25",
+        "seg2": "70",
+        "diff": false,
+        "className": "",
+        "x": 1370,
+        "y": 940,
+        "wires": []
+    },
+    {
+        "id": "group_lora_v2",
+        "type": "ui_group",
+        "name": "Sensores LoRa",
+        "tab": "tab_lora_v2",
+        "order": 1,
+        "disp": false,
+        "width": 24,
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "tab_lora_v2",
+        "type": "ui_tab",
+        "name": "Sensores LoRa",
+        "icon": "dashboard",
+        "order": 2,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "c52ad38a8cb6c66b",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "g": "3a99c426b8213441",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "c6b7334392988be7",
+            "b6407116b0bca735",
+            "bcc4cdafdf1fc67a",
+            "d15f4079e1e7986f",
+            "8aa22df037edb1bd",
+            "294bd71369e7226d",
+            "eab038facc23326c",
+            "2a0120f4671be3c3",
+            "e2e6c8600901deee",
+            "35adda295932b40d",
+            "08221e95af32a95f",
+            "0806c7e98304da18",
+            "71743e2b44968b0b",
+            "6aafe13f5e40ed2b",
+            "8eaf78c3808fefda"
+        ],
+        "x": 134,
+        "y": 1099,
+        "w": 1902,
+        "h": 382
+    },
+    {
+        "id": "c6b7334392988be7",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "Página 3 - COMPONENTE BASE — Datos reales + simulador desacoplado",
+        "info": "Reemplaza los nodos random/inject sueltos y los flow.humedad1..humedad6. Estructura los 6 sensores LoRa como UN solo objeto en contexto (flow.sensoresLora) en vez de 6 variables sueltas, y corrige el bug donde flow.humedad se llenaba con payload.temperature en vez del campo correcto. Ajusta los nombres de tópico MQTT (orquideario/lora/1..6 y orquideario/ambiental) a los que realmente publique tu gateway LoRa/ESP32 — aquí uso una convención de ejemplo.",
+        "x": 420,
+        "y": 1140,
+        "wires": []
+    },
+    {
+        "id": "b6407116b0bca735",
+        "type": "mqtt in",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "MQTT — sensores LoRa (wildcard)",
+        "topic": "orquideario/lora/+",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "drs_broker01",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 450,
+        "y": 1240,
+        "wires": [
+            [
+                "8eaf78c3808fefda"
+            ]
+        ]
+    },
+    {
+        "id": "bcc4cdafdf1fc67a",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "Promedio de humedad (sustrato)",
+        "func": "const sensores = global.get('sensoresLora') || {};\nconst valores = Object.values(sensores)\n    .map(s => s.humedad)\n    .filter(v => typeof v === 'number' && !isNaN(v));\n\nif (valores.length === 0) return null;\n\nconst promedio = valores.reduce((a, b) => a + b, 0) / valores.length;\n\nmsg.payload = Math.round(promedio * 10) / 10;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1200,
+        "y": 1280,
+        "wires": [
+            [
+                "08221e95af32a95f"
+            ]
+        ]
+    },
+    {
+        "id": "d15f4079e1e7986f",
+        "type": "mqtt in",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "MQTT — sensor ambiental",
+        "topic": "orquideario/ambiental",
+        "qos": "0",
+        "datatype": "json",
+        "broker": "drs_broker01",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 450,
+        "y": 1340,
+        "wires": [
+            [
+                "71743e2b44968b0b"
+            ]
+        ]
+    },
+    {
+        "id": "8aa22df037edb1bd",
+        "type": "ui_switch",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "Modo simulación",
+        "label": "Modo simulación (datos de prueba)",
+        "tooltip": "",
+        "group": "113693c42b8e28c9",
+        "order": 99,
+        "width": 0,
+        "height": 0,
+        "passthru": false,
+        "decouple": "false",
+        "topic": "modoSimulacion",
+        "topicType": "str",
+        "style": "",
+        "onvalue": "true",
+        "onvalueType": "bool",
+        "onicon": "",
+        "oncolor": "",
+        "offvalue": "false",
+        "offvalueType": "bool",
+        "officon": "",
+        "offcolor": "",
+        "x": 450,
+        "y": 1440,
+        "wires": [
+            [
+                "294bd71369e7226d"
+            ]
+        ]
+    },
+    {
+        "id": "294bd71369e7226d",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "Guardar flow.modoSimulacion",
+        "func": "global.set('modoSimulacion', msg.payload === true);\nreturn null;",
+        "outputs": 0,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 710,
+        "y": 1440,
+        "wires": []
+    },
+    {
+        "id": "eab038facc23326c",
+        "type": "inject",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "Cada 10s (si modoSimulacion=true)",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "10",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "2",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 1210,
+        "y": 1360,
+        "wires": [
+            [
+                "2a0120f4671be3c3"
+            ]
+        ]
+    },
+    {
+        "id": "2a0120f4671be3c3",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "Generar datos simulados (misma forma que los reales)",
+        "func": "node.warn('modoSimulacion = ' + global.get('modoSimulacion'));\nif (!global.get('modoSimulacion')) return [null, null];\n\nconst msgsLora = [];\nfor (let i = 1; i <= 6; i++) {\n    msgsLora.push({\n        topic: 'orquideario/lora/' + i,\n        payload: {\n            humedad: Math.round(30 + Math.random() * 15),\n            bateria: Math.round(60 + Math.random() * 40)\n        }\n    });\n}\n\nconst msgAmbiental = {\n    topic: 'orquideario/ambiental',\n    payload: {\n        temperatura: Math.round((22 + Math.random() * 6) * 10) / 10,\n        humedad: Math.round(40 + Math.random() * 20)\n    }\n};\n\nreturn [msgsLora, [msgAmbiental]];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1620,
+        "y": 1360,
+        "wires": [
+            [
+                "e2e6c8600901deee",
+                "8eaf78c3808fefda"
+            ],
+            [
+                "6aafe13f5e40ed2b"
+            ]
+        ]
+    },
+    {
+        "id": "e2e6c8600901deee",
+        "type": "debug",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "debug 11",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1930,
+        "y": 1320,
+        "wires": []
+    },
+    {
+        "id": "35adda295932b40d",
+        "type": "debug",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "debug 12",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1050,
+        "y": 1180,
+        "wires": []
+    },
+    {
+        "id": "08221e95af32a95f",
+        "type": "debug",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "debug 13",
+        "active": false,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 1450,
+        "y": 1200,
+        "wires": []
+    },
+    {
+        "id": "0806c7e98304da18",
+        "type": "link out",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "link out 6",
+        "mode": "link",
+        "links": [
+            "73faf3c6ac0497dd",
+            "b8649b811e9e88d9",
+            "18a51fae157ea0ec"
+        ],
+        "x": 1165,
+        "y": 1220,
+        "wires": []
+    },
+    {
+        "id": "71743e2b44968b0b",
+        "type": "link out",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "link out 7",
+        "mode": "link",
+        "links": [
+            "bdf5a465f13ef768"
+        ],
+        "x": 205,
+        "y": 1440,
+        "wires": []
+    },
+    {
+        "id": "6aafe13f5e40ed2b",
+        "type": "link out",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "link out 8",
+        "mode": "link",
+        "links": [
+            "bdf5a465f13ef768"
+        ],
+        "x": 1865,
+        "y": 1440,
+        "wires": []
+    },
+    {
+        "id": "8eaf78c3808fefda",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "c52ad38a8cb6c66b",
+        "name": "Parsear sensor LoRa → flow.sensoresLora",
+        "func": "// Espera dos formatos posibles de payload:\n// A) Real (Heltec Receptor): { id, soil, hum, temp, bat, rssi, snr } — valores CRUDOS, sin calibrar\n// B) Simulado (modoSimulacion=true): { humedad, bateria } — ya en porcentaje, listo para usar\nconst partes = msg.topic.split('/');\nconst sensorId = partes[partes.length - 1];\n\n// ============================================================\n// CALIBRACION DE HUMEDAD — un par SOIL_SECO/SOIL_MOJADO por sensor,\n// medido en campo el 5-6 de septiembre 2026 (aire = seco, agua = mojado).\n// Cada sensor tiene su propia pequeña variacion de fabricacion, por eso\n// se calibra individualmente en vez de usar una sola constante para los 6.\n// ============================================================\nconst CALIBRACION_SOIL = {\n    \"1\": { seco: 886, mojado: 660 },  // ID012101\n    \"2\": { seco: 883, mojado: 677 },  // ID012129\n    \"3\": { seco: 888, mojado: 624 },  // ID012097\n    \"4\": { seco: 883, mojado: 653 },  // ID012127\n    \"5\": { seco: 879, mojado: 618 },  // ID012107\n    \"6\": { seco: 883, mojado: 680 },  // ID012096\n};\n\n// Calibracion de bateria — TODAVIA PENDIENTE, usa placeholders genericos\n// para los 6 sensores por igual hasta que se haga la prueba real\n// (bateria nueva / bateria casi agotada) para cada uno.\nconst BAT_VACIA = 700;\nconst BAT_LLENA = 1000;\n\nfunction aPorcentaje(valor, desde, hasta) {\n    if (typeof valor !== 'number' || isNaN(valor)) return null;\n    const pct = ((valor - desde) / (hasta - desde)) * 100;\n    return Math.max(0, Math.min(100, Math.round(pct * 10) / 10));\n}\n\n// Umbral de aviso: por debajo de este % de bateria, la lectura de humedad\n// de ESE sensor puede no ser confiable (bajo voltaje distorsiona el ADC\n// capacitivo, no solo afecta la transmision).\nconst UMBRAL_BATERIA_BAJA = 20;\n\nlet humedad, bateria, idHardware;\n\nif (msg.payload && typeof msg.payload.soil === 'number') {\n    // Dato real del Heltec Receptor: soil/bat vienen crudos, hay que calibrar\n    const cal = CALIBRACION_SOIL[sensorId];\n    if (cal) {\n        humedad = aPorcentaje(msg.payload.soil, cal.seco, cal.mojado);\n    } else {\n        node.warn('Sensor ' + sensorId + ' sin calibracion de humedad definida, se descarta el dato de soil');\n        humedad = null;\n    }\n    bateria = aPorcentaje(msg.payload.bat, BAT_VACIA, BAT_LLENA);\n    idHardware = msg.payload.id || null;\n} else if (msg.payload && typeof msg.payload.humedad !== 'undefined') {\n    // Dato simulado: ya viene en porcentaje, se usa tal cual (sin ID de hardware real)\n    humedad = Number(msg.payload.humedad);\n    bateria = msg.payload.bateria !== undefined ? Number(msg.payload.bateria) : null;\n    idHardware = null;\n} else {\n    node.warn('Mensaje del sensor LoRa ' + sensorId + ' sin campos reconocibles (ni soil ni humedad), se descarta');\n    return null;\n}\n\n// Si la bateria esta baja, la lectura de humedad de ESTE sensor puede no\n// ser confiable (no es solo un aviso de \"cambiar pronto la bateria\").\nconst bateriaBaja = (bateria !== null && bateria < UMBRAL_BATERIA_BAJA);\n\nlet sensores = global.get('sensoresLora') || {};\nsensores[sensorId] = {\n    humedad: humedad,\n    bateria: bateria,\n    bateriaBaja: bateriaBaja,\n    idHardware: idHardware,\n    ultimaLectura: Date.now()\n};\nglobal.set('sensoresLora', sensores);\n\nmsg.payload = sensores;\nmsg.sensorId = sensorId;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 810,
+        "y": 1280,
+        "wires": [
+            [
+                "bcc4cdafdf1fc67a",
+                "35adda295932b40d",
+                "0806c7e98304da18"
+            ]
+        ]
+    },
+    {
+        "id": "drs_broker01",
+        "type": "mqtt-broker",
+        "name": "Broker Orquideario (reutiliza el existente si ya tienes uno en 127.0.0.1:1883)",
+        "broker": "127.0.0.1",
+        "port": "1883",
+        "clientid": "",
+        "usetls": false,
+        "compatmode": true,
+        "keepalive": "60",
+        "cleansession": true
+    },
+    {
+        "id": "113693c42b8e28c9",
+        "type": "ui_group",
+        "name": "Sidebar_Configuracion_parametros",
+        "tab": "",
+        "order": 1,
+        "disp": true,
+        "width": 6,
+        "collapse": false,
+        "className": ""
+    },
+    {
+        "id": "e1d2406a8c7d3952",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "amb_comment01",
+            "drs_fn_parse_amb01",
+            "amb_fn_separar01",
+            "amb_gauge_temp",
+            "amb_gauge_hum",
+            "amb_fn_chart_temp01",
+            "amb_fn_chart_hum01",
+            "amb_chart_temp",
+            "amb_chart_hum",
+            "bdf5a465f13ef768"
+        ],
+        "x": 114,
+        "y": 1579,
+        "w": 1592,
+        "h": 342
+    },
+    {
+        "id": "amb_comment01",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "e1d2406a8c7d3952",
+        "name": "Página 5 — Sensor Ambiental (contenido real)",
+        "info": "Borra el nodo placeholder 'Encabezado Sensor Ambiental'. Este archivo reemplaza el nodo 'Parsear sensor ambiental → flow.ambiental' del archivo 2 (mismo id, se actualiza solo el cableado al reimportar).",
+        "x": 310,
+        "y": 1620,
+        "wires": []
+    },
+    {
+        "id": "drs_fn_parse_amb01",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "e1d2406a8c7d3952",
+        "name": "Parsear sensor ambiental → global.ambiental",
+        "func": "// Espera JSON: { \"temperatura\": <°C>, \"humedad\": <0-100> }\nif (!msg.payload || typeof msg.payload.temperatura === 'undefined' || typeof msg.payload.humedad === 'undefined') {\n    node.warn('Mensaje del sensor ambiental incompleto, se descarta');\n    return null;\n}\n\nconst dato = {\n    temperatura: Number(msg.payload.temperatura),\n    humedad: Number(msg.payload.humedad),\n    ultimaLectura: Date.now()\n};\nglobal.set('ambiental', dato);\n\nmsg.payload = dato;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 570,
+        "y": 1720,
+        "wires": [
+            [
+                "amb_fn_separar01"
+            ]
+        ]
+    },
+    {
+        "id": "amb_fn_separar01",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "e1d2406a8c7d3952",
+        "name": "Separar temperatura y humedad",
+        "func": "const dato = msg.payload;\nreturn [\n    { payload: dato.temperatura },\n    { payload: dato.humedad }\n];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 910,
+        "y": 1720,
+        "wires": [
+            [
+                "amb_gauge_temp",
+                "amb_fn_chart_temp01"
+            ],
+            [
+                "amb_gauge_hum",
+                "amb_fn_chart_hum01"
+            ]
+        ]
+    },
+    {
+        "id": "amb_gauge_temp",
+        "type": "ui_gauge",
+        "z": "2ac18697561110b7",
+        "g": "e1d2406a8c7d3952",
+        "name": "Temperatura ambiente",
+        "group": "group_ambiental_v2",
+        "order": 1,
+        "width": 12,
+        "height": 5,
+        "gtype": "gage",
+        "title": "Temperatura ambiente",
+        "label": "",
+        "format": "{{value}}°C",
+        "min": 15,
+        "max": 35,
+        "colors": [
+            "#64b5f6",
+            "#4caf50",
+            "#e57373"
+        ],
+        "seg1": "20",
+        "seg2": "28",
+        "diff": false,
+        "className": "",
+        "x": 1180,
+        "y": 1660,
+        "wires": []
+    },
+    {
+        "id": "amb_gauge_hum",
+        "type": "ui_gauge",
+        "z": "2ac18697561110b7",
+        "g": "e1d2406a8c7d3952",
+        "name": "Humedad ambiente",
+        "group": "group_ambiental_v2",
+        "order": 2,
+        "width": 12,
+        "height": 5,
+        "gtype": "gage",
+        "title": "Humedad ambiente",
+        "label": "",
+        "format": "{{value}}%",
+        "min": 0,
+        "max": 100,
+        "colors": [
+            "#e57373",
+            "#ffca28",
+            "#26c6da"
+        ],
+        "seg1": "30",
+        "seg2": "50",
+        "diff": false,
+        "className": "",
+        "x": 1170,
+        "y": 1880,
+        "wires": []
+    },
+    {
+        "id": "amb_fn_chart_temp01",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "e1d2406a8c7d3952",
+        "name": "Preparar punto — temperatura",
+        "func": "// Máximo 1 punto por minuto, para que la gráfica se vea como tendencia\n// y no como ruido (misma lógica que en Sensores LoRa).\nconst minIntervaloMs = 60 * 1000;\nconst ultimo = global.get('ultimoPuntoGraficaAmbTemp') || 0;\nconst ahora = Date.now();\n\nif (ahora - ultimo < minIntervaloMs) return null;\n\nglobal.set('ultimoPuntoGraficaAmbTemp', ahora);\nreturn { topic: 'Temperatura', payload: msg.payload };",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1210,
+        "y": 1720,
+        "wires": [
+            [
+                "amb_chart_temp"
+            ]
+        ]
+    },
+    {
+        "id": "amb_fn_chart_hum01",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "e1d2406a8c7d3952",
+        "name": "Preparar punto — humedad",
+        "func": "const minIntervaloMs = 60 * 1000;\nconst ultimo = global.get('ultimoPuntoGraficaAmbHum') || 0;\nconst ahora = Date.now();\n\nif (ahora - ultimo < minIntervaloMs) return null;\n\nglobal.set('ultimoPuntoGraficaAmbHum', ahora);\nreturn { topic: 'Humedad', payload: msg.payload };",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1200,
+        "y": 1800,
+        "wires": [
+            [
+                "amb_chart_hum"
+            ]
+        ]
+    },
+    {
+        "id": "amb_chart_temp",
+        "type": "ui_chart",
+        "z": "2ac18697561110b7",
+        "g": "e1d2406a8c7d3952",
+        "name": "Histórico de temperatura ambiente",
+        "group": "group_ambiental_v2",
+        "order": 3,
+        "width": 24,
+        "height": 8,
+        "label": "Temperatura ambiente (°C)",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "Esperando datos...",
+        "dot": false,
+        "ymin": "15",
+        "ymax": "35",
+        "removeOlder": "180",
+        "removeOlderPoints": "200",
+        "removeOlderUnit": "60",
+        "cutout": 0,
+        "useOneColor": true,
+        "useUTC": false,
+        "colors": [
+            "#75ff42",
+            "#000000",
+            "#000000",
+            "#000000",
+            "#000000",
+            "#000000",
+            "#000000",
+            "#000000",
+            "#000000"
+        ],
+        "outputs": 1,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 1540,
+        "y": 1720,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "amb_chart_hum",
+        "type": "ui_chart",
+        "z": "2ac18697561110b7",
+        "g": "e1d2406a8c7d3952",
+        "name": "Histórico de humedad ambiente",
+        "group": "group_ambiental_v2",
+        "order": 4,
+        "width": 24,
+        "height": 8,
+        "label": "Humedad ambiente (%)",
+        "chartType": "line",
+        "legend": "false",
+        "xformat": "HH:mm:ss",
+        "interpolate": "linear",
+        "nodata": "Esperando datos...",
+        "dot": false,
+        "ymin": "0",
+        "ymax": "100",
+        "removeOlder": "180",
+        "removeOlderPoints": "200",
+        "removeOlderUnit": "60",
+        "cutout": 0,
+        "useOneColor": true,
+        "useUTC": false,
+        "colors": [
+            "#26c6da"
+        ],
+        "outputs": 0,
+        "useDifferentColor": false,
+        "className": "",
+        "x": 1530,
+        "y": 1800,
+        "wires": []
+    },
+    {
+        "id": "bdf5a465f13ef768",
+        "type": "link in",
+        "z": "2ac18697561110b7",
+        "g": "e1d2406a8c7d3952",
+        "name": "link in 10",
+        "links": [
+            "71743e2b44968b0b",
+            "6aafe13f5e40ed2b"
+        ],
+        "x": 285,
+        "y": 1720,
+        "wires": [
+            [
+                "drs_fn_parse_amb01"
+            ]
+        ]
+    },
+    {
+        "id": "group_ambiental_v2",
+        "type": "ui_group",
+        "name": "Sensor Ambiental",
+        "tab": "tab_ambiental_v2",
+        "order": 1,
+        "disp": false,
+        "width": 24,
+        "collapse": false
+    },
+    {
+        "id": "tab_ambiental_v2",
+        "type": "ui_tab",
+        "name": "Sensor Ambiental",
+        "icon": "dashboard",
+        "order": 3,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "a5d1cd1b544fe9e5",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "alr_comment01",
+            "alr_inject_eval",
+            "alr_fn_evaluar",
+            "alr_lista_template"
+        ],
+        "x": 114,
+        "y": 1999,
+        "w": 1252,
+        "h": 162
+    },
+    {
+        "id": "alr_comment01",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "a5d1cd1b544fe9e5",
+        "name": "Página 6 — Alertas v2 (activas destacadas, resto compacto)",
+        "info": "Reemplaza el motor de reglas y la lista anteriores (mismos ids). Ahora también registra transiciones en global.historialAlertas para que la página Historial las muestre.",
+        "x": 360,
+        "y": 2040,
+        "wires": []
+    },
+    {
+        "id": "alr_inject_eval",
+        "type": "inject",
+        "z": "2ac18697561110b7",
+        "g": "a5d1cd1b544fe9e5",
+        "name": "Cada 15s, evaluar todas las alertas",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "15",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "3",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 680,
+        "y": 2120,
+        "wires": [
+            [
+                "alr_fn_evaluar"
+            ]
+        ]
+    },
+    {
+        "id": "alr_fn_evaluar",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "a5d1cd1b544fe9e5",
+        "name": "Motor de reglas — evaluar todas las alertas",
+        "func": "function evaluarSostenido(id, activaAhora) {\n    const estados = context.get('estados') || {};\n    let estado = estados[id] || { startTime: null, activa: false };\n    const tiempoMin = global.get('limiteTiempoMin') || 15;\n    const tiempoMs = tiempoMin * 60 * 1000;\n    const ahora = Date.now();\n    const estabaActiva = estado.activa;\n\n    if (!activaAhora) {\n        estado = { startTime: null, activa: false };\n    } else if (estado.activa) {\n        // ya confirmada, se mantiene mientras la condición siga\n    } else if (!estado.startTime) {\n        estado.startTime = ahora;\n    } else if ((ahora - estado.startTime) >= tiempoMs) {\n        estado.activa = true;\n    }\n\n    estados[id] = estado;\n    context.set('estados', estados);\n\n    let transicion = null;\n    if (!estabaActiva && estado.activa) transicion = 'entrada';\n    if (estabaActiva && !estado.activa) transicion = 'salida';\n\n    let estadoTexto;\n    if (estado.activa) {\n        estadoTexto = 'alerta';\n    } else if (activaAhora) {\n        estadoTexto = 'vigilando';\n    } else {\n        estadoTexto = 'normal';\n    }\n\n    return { activa: estado.activa, estadoTexto: estadoTexto, transicion: transicion };\n}\n\nfunction registrarHistorial(titulo, detalle, transicion) {\n    if (!transicion) return;\n    let historial = global.get('historialAlertas') || [];\n    historial.unshift({\n        fecha: new Date().toLocaleString('es-GT'),\n        titulo: titulo,\n        evento: transicion === 'entrada' ? 'Activada' : 'Resuelta',\n        detalle: detalle\n    });\n    if (historial.length > 200) historial = historial.slice(0, 200);\n    global.set('historialAlertas', historial);\n}\n\nconst ambiental = global.get('ambiental') || {};\nconst sensores = global.get('sensoresLora') || {};\n\nconst limiteSupTemp = global.get('limiteSupTemp') ?? 28;\nconst limiteInfHumAmb = global.get('limiteInfHumAmb') ?? 40;\nconst limiteSupHumAmb = global.get('limiteSupHumAmb') ?? 80;\nconst limiteInfHumSustrato = global.get('limiteInfHumSustrato') ?? 25;\nconst limiteSupHumSustrato = global.get('limiteSupHumSustrato') ?? 70;\nconst umbralDesviacion = global.get('umbralDesviacionSensor') ?? 15;\n\nconst alertas = [];\n\nfunction evaluarRegla(titulo, activaCondicion, detalle, idRegla) {\n    const resultado = evaluarSostenido(idRegla, activaCondicion);\n    registrarHistorial(titulo, detalle, resultado.transicion);\n    alertas.push({ titulo: titulo, activa: resultado.activa, estado: resultado.estadoTexto, detalle: detalle });\n}\n\n// --- Temperatura ambiente ---\nif (ambiental.temperatura !== undefined) {\n    evaluarRegla(\n        'Temperatura ambiente elevada',\n        ambiental.temperatura > limiteSupTemp,\n        ambiental.temperatura.toFixed(1) + '°C (límite ' + limiteSupTemp + '°C)',\n        'temp_alta'\n    );\n}\n\n// --- Humedad ambiente ---\nif (ambiental.humedad !== undefined) {\n    evaluarRegla(\n        'Humedad ambiente fuera de rango',\n        ambiental.humedad < limiteInfHumAmb || ambiental.humedad > limiteSupHumAmb,\n        ambiental.humedad.toFixed(1) + '% (rango ' + limiteInfHumAmb + '–' + limiteSupHumAmb + '%)',\n        'hum_amb_rango'\n    );\n}\n\n// --- Humedad de sustrato: UN solo chequeo combinado por sensor ---\nconst ids = Object.keys(sensores).sort(function(a, b) { return Number(a) - Number(b); });\n\nids.forEach(function(id) {\n    const s = sensores[id];\n    if (s.humedad === undefined) return;\n\n    const otros = ids.filter(function(otroId) { return otroId !== id; })\n        .map(function(otroId) { return sensores[otroId].humedad; })\n        .filter(function(v) { return typeof v === 'number'; });\n\n    const promedioOtros = otros.length > 0 ? otros.reduce(function(a, b) { return a + b; }, 0) / otros.length : null;\n    const diferencia = promedioOtros !== null ? Math.abs(s.humedad - promedioOtros) : 0;\n\n    const problemas = [];\n    if (s.humedad < limiteInfHumSustrato) {\n        problemas.push('muy seco (mínimo ' + limiteInfHumSustrato + '%)');\n    }\n    if (s.humedad > limiteSupHumSustrato) {\n        problemas.push('exceso de agua (máximo ' + limiteSupHumSustrato + '%)');\n    }\n    if (promedioOtros !== null && diferencia > umbralDesviacion) {\n        problemas.push('distinto al resto (promedio de los demás ' + promedioOtros.toFixed(1) + '%)');\n    }\n\n    const activaCondicion = problemas.length > 0;\n    const detalle = activaCondicion\n        ? s.humedad.toFixed(1) + '% — ' + problemas.join('; ')\n        : s.humedad.toFixed(1) + '% — dentro de rango, consistente con el resto';\n\n    evaluarRegla('Sensor ' + id + ' — humedad de sustrato', activaCondicion, detalle, 'sustrato_' + id);\n});\n\n// Guardo el resultado para que otras páginas (como Resumen) lo puedan\n// leer directo, sin tener que repetir todo este cálculo\nglobal.set('ultimasAlertas', alertas);\n\nmsg.payload = alertas;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1000,
+        "y": 2120,
+        "wires": [
+            [
+                "alr_lista_template"
+            ]
+        ]
+    },
+    {
+        "id": "alr_lista_template",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "a5d1cd1b544fe9e5",
+        "group": "group_alertas_v2",
+        "name": "Lista de alertas",
+        "order": 1,
+        "width": 24,
+        "height": 12,
+        "format": "<style>\n.alert-hero{ text-align:center; padding:20px 20px 28px; }\n.alert-hero .big{ font-size:19px; font-weight:700; color:#4caf50; font-family:Arial; margin-bottom:4px; }\n.alert-hero.warning .big{ color:#e57373; }\n.alert-hero .small{ color:#9098a3; font-size:13px; font-family:Arial; }\n.alert-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); gap:12px; padding:4px; }\n.alert-tag{\n  padding:14px 16px; border-radius:10px; border:1px solid #24242b; background:#15151a;\n  font-family:Arial, sans-serif; transition:border-color .2s ease;\n}\n.alert-tag.active{ border-color:rgba(229,115,115,.5); background:rgba(229,115,115,.08); }\n.alert-tag.vigilando{ border-color:rgba(255,202,40,.5); background:rgba(255,202,40,.06); }\n.alert-tag-title{ color:#e8eaed; font-size:13px; font-weight:600; margin-bottom:4px; }\n.alert-tag-detail{ color:#6b7280; font-size:11px; margin-bottom:10px; line-height:1.4; }\n.alert-tag-badge{\n  display:inline-block; font-size:10px; font-weight:700; padding:4px 10px; border-radius:10px;\n  letter-spacing:.5px; text-transform:uppercase;\n}\n.alert-tag-badge.ok{ background:rgba(76,175,80,.15); color:#4caf50; }\n.alert-tag-badge.alert{ background:rgba(229,115,115,.2); color:#e57373; }\n.alert-tag-badge.vigilando{ background:rgba(255,202,40,.18); color:#ffca28; }\n.alert-empty{ color:#9098a3; font-family:Arial, sans-serif; padding:24px; text-align:center; }\n</style>\n\n<div id=\"alert-list\"></div>\n\n<script>\n(function(scope){\n  var container = document.getElementById('alert-list');\n\n  var etiquetas = { normal: 'Normal', vigilando: 'Vigilando', alerta: 'Alerta' };\n  var clases = { normal: 'ok', vigilando: 'vigilando', alerta: 'alert' };\n  var prioridad = { alerta: 0, vigilando: 1, normal: 2 };\n\n  scope.$watch('msg', function(msg){\n    if (!msg || !msg.payload) return;\n    var alertas = msg.payload;\n\n    if (!alertas.length) {\n      container.innerHTML = '<div class=\"alert-empty\">Esperando datos de sensores para evaluar alertas...</div>';\n      return;\n    }\n\n    var activas = alertas.filter(function(a){ return a.estado === 'alerta'; });\n    var ordenadas = alertas.slice().sort(function(a, b){ return prioridad[a.estado] - prioridad[b.estado]; });\n\n    var html = '';\n\n    if (activas.length === 0) {\n      html += '<div class=\"alert-hero\"><div class=\"big\">Todo en orden</div>' +\n        '<div class=\"small\">' + alertas.length + ' parámetros monitoreados, ninguno en alerta</div></div>';\n    } else {\n      html += '<div class=\"alert-hero warning\"><div class=\"big\">Verificar ' + activas.length + ' parámetro' + (activas.length > 1 ? 's' : '') + ' en alerta</div>' +\n        '<div class=\"small\">Revisa las tarjetas resaltadas en rojo abajo</div></div>';\n    }\n\n    html += '<div class=\"alert-grid\">';\n    ordenadas.forEach(function(a){\n      html += '<div class=\"alert-tag ' + a.estado + '\">' +\n        '<div class=\"alert-tag-title\">' + a.titulo + '</div>' +\n        '<div class=\"alert-tag-detail\">' + a.detalle + '</div>' +\n        '<span class=\"alert-tag-badge ' + clases[a.estado] + '\">' + etiquetas[a.estado] + '</span>' +\n      '</div>';\n    });\n    html += '</div>';\n\n    container.innerHTML = html;\n  });\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 1260,
+        "y": 2120,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "group_alertas_v2",
+        "type": "ui_group",
+        "name": "Alertas",
+        "tab": "tab_alertas_v2",
+        "order": 1,
+        "disp": false,
+        "width": 24,
+        "collapse": false
+    },
+    {
+        "id": "tab_alertas_v2",
+        "type": "ui_tab",
+        "name": "Alertas",
+        "icon": "dashboard",
+        "order": 4,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "077f580df3fe6e5a",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "hist_comment01",
+            "hist_inject_pub",
+            "hist_fn_leer",
+            "hist_table",
+            "hist_btn_vaciar",
+            "hist_fn_vaciar"
+        ],
+        "x": 114,
+        "y": 2739,
+        "w": 1212,
+        "h": 262
+    },
+    {
+        "id": "hist_comment01",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "077f580df3fe6e5a",
+        "name": "Página 8 — Historial (registro de transiciones de alertas)",
+        "info": "Borra el placeholder 'Historial — contenido pendiente'. Se llena automáticamente desde el motor de reglas de Alertas cada vez que algo pasa de normal→alerta o de alerta→normal.",
+        "x": 350,
+        "y": 2780,
+        "wires": []
+    },
+    {
+        "id": "hist_inject_pub",
+        "type": "inject",
+        "z": "2ac18697561110b7",
+        "g": "077f580df3fe6e5a",
+        "name": "Cada 15s, publicar historial",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "15",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "4",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 640,
+        "y": 2860,
+        "wires": [
+            [
+                "hist_fn_leer"
+            ]
+        ]
+    },
+    {
+        "id": "hist_fn_leer",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "077f580df3fe6e5a",
+        "name": "Leer historial de alertas",
+        "func": "const historial = global.get('historialAlertas') || [];\nmsg.payload = historial;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 910,
+        "y": 2860,
+        "wires": [
+            [
+                "hist_table"
+            ]
+        ]
+    },
+    {
+        "id": "hist_table",
+        "type": "ui_table",
+        "z": "2ac18697561110b7",
+        "g": "077f580df3fe6e5a",
+        "group": "group_historial_v2",
+        "name": "Tabla de historial de alertas",
+        "order": 3,
+        "width": 24,
+        "height": 7,
+        "columns": [
+            {
+                "field": "fecha",
+                "title": "Fecha y hora",
+                "width": "180",
+                "align": "left",
+                "formatter": "plaintext"
+            },
+            {
+                "field": "titulo",
+                "title": "Parámetro",
+                "width": "260",
+                "align": "left",
+                "formatter": "plaintext"
+            },
+            {
+                "field": "evento",
+                "title": "Evento",
+                "width": "100",
+                "align": "center",
+                "formatter": "plaintext"
+            },
+            {
+                "field": "detalle",
+                "title": "Detalle",
+                "width": "300",
+                "align": "left",
+                "formatter": "plaintext"
+            }
+        ],
+        "outputs": 0,
+        "cts": false,
+        "x": 1180,
+        "y": 2860,
+        "wires": []
+    },
+    {
+        "id": "hist_btn_vaciar",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "077f580df3fe6e5a",
+        "group": "group_historial_v2",
+        "name": "Vaciar historial",
+        "order": 5,
+        "width": 10,
+        "height": 3,
+        "format": "<style>\n.btn-vaciar{\n  width:100%; height:44px; background:#15151a; border:1px solid #24242b;\n  border-radius:8px; cursor:pointer; display:flex; align-items:center; justify-content:center;\n  color:#9098a3; font-family:Arial, sans-serif; font-size:13px; font-weight:600;\n  letter-spacing:.5px; transition:all .2s ease;\n}\n.btn-vaciar:hover{ border-color:rgba(229,115,115,.4); color:#e57373; background:rgba(229,115,115,.06); }\n</style>\n<div class=\"btn-vaciar\" ng-click=\"send({payload:'vaciar'})\">VACIAR HISTORIAL</div>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 660,
+        "y": 2960,
+        "wires": [
+            [
+                "hist_fn_vaciar"
+            ]
+        ]
+    },
+    {
+        "id": "hist_fn_vaciar",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "077f580df3fe6e5a",
+        "name": "Vaciar global.historialAlertas",
+        "func": "global.set('historialAlertas', []);\nmsg.payload = [];\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 940,
+        "y": 2960,
+        "wires": [
+            [
+                "hist_table"
+            ]
+        ]
+    },
+    {
+        "id": "group_historial_v2",
+        "type": "ui_group",
+        "name": "Historial",
+        "tab": "tab_historial_v2",
+        "order": 1,
+        "disp": false,
+        "width": 24,
+        "collapse": false
+    },
+    {
+        "id": "tab_historial_v2",
+        "type": "ui_tab",
+        "name": "Historial",
+        "icon": "dashboard",
+        "order": 5,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "5dbfe04f9d5c0d3e",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "res_comment01",
+            "res_inject",
+            "res_fn_armar",
+            "res_template"
+        ],
+        "x": 94,
+        "y": 4119,
+        "w": 1152,
+        "h": 162
+    },
+    {
+        "id": "res_comment01",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "5dbfe04f9d5c0d3e",
+        "name": "PÁGINA 11 — Resumen (vista panorámica)",
+        "info": "Borra el placeholder 'Resumen — contenido pendiente'. Junta datos de sensores, alertas y riego que ya viven en global context, sin duplicar ninguna lógica — solo los lee.",
+        "x": 290,
+        "y": 4160,
+        "wires": []
+    },
+    {
+        "id": "res_inject",
+        "type": "inject",
+        "z": "2ac18697561110b7",
+        "g": "5dbfe04f9d5c0d3e",
+        "name": "Cada 15s, actualizar resumen",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "15",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "3",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 600,
+        "y": 4240,
+        "wires": [
+            [
+                "res_fn_armar"
+            ]
+        ]
+    },
+    {
+        "id": "res_fn_armar",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "5dbfe04f9d5c0d3e",
+        "name": "Armo el resumen general",
+        "func": "const sensores = global.get('sensoresLora') || {};\nconst ambiental = global.get('ambiental') || {};\nconst alertas = global.get('ultimasAlertas') || [];\nconst estadoValvula = global.get('estadoValvula') || {};\nconst modoOperacion = global.get('modoOperacion') || 'automatico';\n\nconst valoresHumedad = Object.values(sensores).map(function(s){ return s.humedad; }).filter(function(v){ return typeof v === 'number'; });\nconst promedioHumedad = valoresHumedad.length > 0 ? (valoresHumedad.reduce(function(a, b){ return a + b; }, 0) / valoresHumedad.length) : null;\n\nconst ahora = Date.now();\nconst sensoresConectados = Object.values(sensores).filter(function(s){\n    return s.ultimaLectura && (ahora - s.ultimaLectura) < 5 * 60 * 1000;\n}).length;\n\nconst alertasActivas = alertas.filter(function(a){ return a.estado === 'alerta'; }).length;\nconst alertasVigilando = alertas.filter(function(a){ return a.estado === 'vigilando'; }).length;\n\nfunction pushHistorial(clave, valor) {\n    if (valor === null || valor === undefined || isNaN(valor)) {\n        return global.get(clave) || [];\n    }\n    let hist = global.get(clave) || [];\n    hist.push(valor);\n    if (hist.length > 30) hist.shift();\n    global.set(clave, hist);\n    return hist;\n}\n\nconst sparkHumedad = pushHistorial('sparkHumedadSustrato', promedioHumedad);\nconst sparkTemp = pushHistorial('sparkTemperatura', ambiental.temperatura);\nconst sparkHumAmb = pushHistorial('sparkHumedadAmb', ambiental.humedad);\n\n// Comparo cada valor contra los límites configurados en Configuración,\n// para decirle al usuario directamente si está bien o mal -- no lo dejo\n// que tenga que hacer la cuenta mental él mismo.\nconst limiteInfHumSustrato = global.get('limiteInfHumSustrato') ?? 25;\nconst limiteSupHumSustrato = global.get('limiteSupHumSustrato') ?? 70;\nconst limiteSupTemp = global.get('limiteSupTemp') ?? 28;\nconst limiteInfHumAmb = global.get('limiteInfHumAmb') ?? 40;\nconst limiteSupHumAmb = global.get('limiteSupHumAmb') ?? 80;\n\nfunction estadoSustrato() {\n    if (promedioHumedad === null) return { texto: 'Sin datos', ok: null };\n    if (promedioHumedad < limiteInfHumSustrato) return { texto: 'Bajo el límite', ok: false };\n    if (promedioHumedad > limiteSupHumSustrato) return { texto: 'Exceso de agua', ok: false };\n    return { texto: 'Dentro de rango', ok: true };\n}\n\nfunction estadoTemp() {\n    if (ambiental.temperatura === undefined) return { texto: 'Sin datos', ok: null };\n    if (ambiental.temperatura > limiteSupTemp) return { texto: 'Por encima del límite', ok: false };\n    return { texto: 'Dentro de rango', ok: true };\n}\n\nfunction estadoHumAmb() {\n    if (ambiental.humedad === undefined) return { texto: 'Sin datos', ok: null };\n    if (ambiental.humedad < limiteInfHumAmb || ambiental.humedad > limiteSupHumAmb) return { texto: 'Fuera de rango', ok: false };\n    return { texto: 'Dentro de rango', ok: true };\n}\n\nmsg.payload = {\n    promedioHumedad: promedioHumedad,\n    temperatura: ambiental.temperatura,\n    humedadAmb: ambiental.humedad,\n    sensoresConectados: sensoresConectados,\n    totalSensores: 6,\n    alertasActivas: alertasActivas,\n    alertasVigilando: alertasVigilando,\n    valvulaAbierta: estadoValvula.abierta || false,\n    valvulaMotivo: estadoValvula.motivo || 'Sin actividad todavía',\n    modoOperacion: modoOperacion,\n    sparkHumedad: sparkHumedad,\n    sparkTemp: sparkTemp,\n    sparkHumAmb: sparkHumAmb,\n    estadoSustrato: estadoSustrato(),\n    estadoTemp: estadoTemp(),\n    estadoHumAmb: estadoHumAmb()\n};\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 880,
+        "y": 4240,
+        "wires": [
+            [
+                "res_template"
+            ]
+        ]
+    },
+    {
+        "id": "res_template",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "5dbfe04f9d5c0d3e",
+        "group": "group_resumen_v2",
+        "name": "Tarjetas de resumen",
+        "order": 1,
+        "width": 24,
+        "height": 34,
+        "format": "<style>\n.resumen-grid{\n  display:grid;\n  grid-template-columns: repeat(2, 1fr) 1fr;\n  grid-template-rows: repeat(2, 1fr);\n  grid-template-areas:\n    \"sustrato temp riego\"\n    \"humedad alertas riego\";\n  gap:16px; padding:4px; font-family:Arial, sans-serif;\n  height: calc(100vh - 150px);\n  min-height: 480px;\n}\n@media (max-width: 1100px){\n  .resumen-grid{\n    grid-template-columns: 1fr 1fr;\n    grid-template-rows: repeat(3, auto);\n    grid-template-areas:\n      \"sustrato temp\"\n      \"humedad alertas\"\n      \"riego riego\";\n  }\n}\n.resumen-card{ background:#15151a; border:1px solid #24242b; border-radius:14px; padding:22px; transition:border-color .2s ease; position:relative; display:flex; flex-direction:column; }\n.resumen-card.area-sustrato{ grid-area: sustrato; }\n.resumen-card.area-temp{ grid-area: temp; }\n.resumen-card.area-humedad{ grid-area: humedad; }\n.resumen-card.area-alertas{ grid-area: alertas; }\n.resumen-card.area-riego{ grid-area: riego; justify-content:center; align-items:flex-start; }\n.resumen-card:hover{ border-color:rgba(38,198,218,.35); }\n.resumen-label{ color:#9098a3; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:14px; }\n.resumen-value{ color:#e8eaed; font-size:34px; font-weight:700; line-height:1; }\n.resumen-value .unit{ font-size:14px; color:#26c6da; margin-left:3px; font-weight:400; }\n.resumen-estado{ display:inline-block; margin-top:9px; font-size:11px; font-weight:700; padding:3px 9px; border-radius:10px; letter-spacing:.3px; }\n.resumen-estado.ok{ background:rgba(76,175,80,.15); color:#4caf50; }\n.resumen-estado.mal{ background:rgba(229,115,115,.2); color:#e57373; }\n.resumen-estado.neutro{ background:#1c1c22; color:#6b7280; }\n.resumen-sub{ color:#6b7280; font-size:11px; margin-top:6px; }\n.resumen-card.alerta{ border-color:rgba(229,115,115,.5); background:rgba(229,115,115,.06); }\n.resumen-card.alerta .resumen-value{ color:#e57373; }\n.resumen-card.ok .resumen-value{ color:#4caf50; }\n.resumen-card.abierta{ border-color:rgba(38,198,218,.5); background:rgba(38,198,218,.06); }\n.resumen-spark{ margin-top:10px; opacity:.8; }\n.resumen-link{ position:absolute; top:16px; right:16px; color:#26c6da; font-size:11px; font-weight:600; cursor:pointer; text-decoration:none; }\n.resumen-link:hover{ text-decoration:underline; }\n</style>\n\n<div class=\"resumen-grid\" id=\"resumen-grid\"></div>\n\n<script>\n(function(scope){\n  var container = document.getElementById('resumen-grid');\n\n  function fmt(v, decimales){\n    if (v === null || v === undefined || isNaN(v)) return '--';\n    return Number(v).toFixed(decimales !== undefined ? decimales : 1);\n  }\n\n  function badge(estado){\n    if (!estado || estado.ok === null) return '<span class=\"resumen-estado neutro\">Sin datos</span>';\n    return '<span class=\"resumen-estado ' + (estado.ok ? 'ok' : 'mal') + '\">' + estado.texto + '</span>';\n  }\n\n  function sparkline(data, color){\n    if (!data || data.length < 2) return '';\n    var w = 200, h = 26;\n    var min = Math.min.apply(null, data);\n    var max = Math.max.apply(null, data);\n    var range = (max - min) || 1;\n    var puntos = data.map(function(v, i){\n      var x = (i / (data.length - 1)) * w;\n      var y = h - ((v - min) / range) * (h - 4) - 2;\n      return x.toFixed(1) + ',' + y.toFixed(1);\n    }).join(' ');\n    return '<div class=\"resumen-spark\"><svg viewBox=\"0 0 ' + w + ' ' + h + '\" width=\"100%\" height=\"26\" preserveAspectRatio=\"none\">' +\n      '<polyline points=\"' + puntos + '\" fill=\"none\" stroke=\"' + color + '\" stroke-width=\"1.6\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/></svg></div>';\n  }\n\n  scope.$watch('msg', function(msg){\n    if (!msg || !msg.payload) return;\n    var d = msg.payload;\n\n    var claseAlertas = d.alertasActivas > 0 ? 'alerta' : 'ok';\n    var subAlertas = d.alertasActivas > 0\n      ? d.alertasActivas + ' requiere' + (d.alertasActivas > 1 ? 'n' : '') + ' atención'\n      : (d.alertasVigilando > 0 ? d.alertasVigilando + ' en observación' : 'Todo en orden');\n\n    var claseValvula = d.valvulaAbierta ? 'abierta' : '';\n\n    var html = '';\n\n    html += '<div class=\"resumen-card area-sustrato\">' +\n      '<div class=\"resumen-label\">Humedad promedio del sustrato</div>' +\n      '<div class=\"resumen-value\">' + fmt(d.promedioHumedad) + '<span class=\"unit\">%</span></div>' +\n      badge(d.estadoSustrato) +\n      sparkline(d.sparkHumedad, '#26c6da') +\n      '<div class=\"resumen-sub\">' + d.sensoresConectados + '/' + d.totalSensores + ' sensores activos</div>' +\n    '</div>';\n\n    html += '<div class=\"resumen-card area-temp\">' +\n      '<div class=\"resumen-label\">Temperatura ambiente</div>' +\n      '<div class=\"resumen-value\">' + fmt(d.temperatura) + '<span class=\"unit\">°C</span></div>' +\n      badge(d.estadoTemp) +\n      sparkline(d.sparkTemp, '#ffab40') +\n    '</div>';\n\n    html += '<div class=\"resumen-card area-humedad\">' +\n      '<div class=\"resumen-label\">Humedad ambiente</div>' +\n      '<div class=\"resumen-value\">' + fmt(d.humedadAmb) + '<span class=\"unit\">%</span></div>' +\n      badge(d.estadoHumAmb) +\n      sparkline(d.sparkHumAmb, '#4dd0e1') +\n    '</div>';\n\n    html += '<div class=\"resumen-card area-alertas ' + claseAlertas + '\">' +\n      '<a class=\"resumen-link\" id=\"resumen-link-alertas\">Ver todas →</a>' +\n      '<div class=\"resumen-label\">Alertas</div>' +\n      '<div class=\"resumen-value\">' + d.alertasActivas + '</div>' +\n      '<div class=\"resumen-sub\">' + subAlertas + '</div>' +\n    '</div>';\n\n    html += '<div class=\"resumen-card area-riego ' + claseValvula + '\">' +\n      '<div class=\"resumen-label\">Riego</div>' +\n      '<div class=\"resumen-value\" style=\"font-size:26px\">' + (d.valvulaAbierta ? 'Abierta' : 'Cerrada') + '</div>' +\n      '<div class=\"resumen-sub\">Modo ' + (d.modoOperacion === 'automatico' ? 'automático' : 'manual') + '</div>' +\n    '</div>';\n\n    container.innerHTML = html;\n\n    var link = document.getElementById('resumen-link-alertas');\n    if (link) {\n      link.onclick = function(){ window.location.hash = '#!/3'; };\n    }\n  });\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": true,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 1120,
+        "y": 4240,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "431229f8a0ed328e",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "cfg_comment01",
+            "cfg_toggle_modo",
+            "cfg_fn_set_modo",
+            "cfg_toggle_sim",
+            "cfg_fn_set_sim",
+            "cfg_limites_form",
+            "cfg_fn_guardar_limites",
+            "cfg_inject_cargar",
+            "cfg_fn_cargar_valores"
+        ],
+        "x": 94,
+        "y": 2199,
+        "w": 1122,
+        "h": 429.5
+    },
+    {
+        "id": "cfg_comment01",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "431229f8a0ed328e",
+        "name": "Página 7 — Configuración v2 (toggles grandes + formulario editar/guardar)",
+        "info": "Borra TODO lo que tengas actualmente en Configuración (el switch viejo de modo, el switch viejo de simulación, y los 7 inputs de límites con sus 7 funciones) antes de importar esto.",
+        "x": 380,
+        "y": 2240,
+        "wires": []
+    },
+    {
+        "id": "cfg_toggle_modo",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "431229f8a0ed328e",
+        "group": "group_config_v2",
+        "name": "Toggle — Modo de operación",
+        "order": 1,
+        "width": 12,
+        "height": 3,
+        "format": "<style>\n.mode-toggle-wrap-op{ padding:6px 0; font-family:Arial, sans-serif; }\n.mode-toggle-label-op{ color:#9098a3; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }\n.mode-toggle-op{\n  position:relative; display:flex; width:100%; max-width:320px; height:54px;\n  background:#15151a; border:1px solid #24242b; border-radius:27px; cursor:pointer;\n  padding:4px; box-sizing:border-box;\n}\n.mode-toggle-op .option{\n  flex:1; display:flex; align-items:center; justify-content:center;\n  font-size:14px; font-weight:700; letter-spacing:.5px;\n  color:#767d87; z-index:2; transition:color .25s ease;\n}\n.mode-toggle-op .option.selected{ color:#0d0d10; }\n.mode-toggle-op .pill{\n  position:absolute; top:4px; left:4px; width:calc(50% - 4px); height:calc(100% - 8px);\n  background:#26c6da; border-radius:23px; transition:transform .25s ease; z-index:1;\n}\n.mode-toggle-op .pill.right{ transform:translateX(100%); }\n</style>\n<div class=\"mode-toggle-wrap-op\">\n  <div class=\"mode-toggle-label-op\">Modo de operación</div>\n  <div class=\"mode-toggle-op\">\n    <div class=\"pill\" id=\"modoOpPill\"></div>\n    <div class=\"option\" id=\"modoOpManual\">MANUAL</div>\n    <div class=\"option\" id=\"modoOpAuto\">AUTOMÁTICO</div>\n  </div>\n</div>\n<script>\n(function(scope){\n  var automatico = true;\n\n  function render(){\n    document.getElementById('modoOpPill').className = 'pill' + (automatico ? ' right' : '');\n    document.getElementById('modoOpManual').className = 'option' + (!automatico ? ' selected' : '');\n    document.getElementById('modoOpAuto').className = 'option' + (automatico ? ' selected' : '');\n  }\n\n  document.getElementById('modoOpManual').onclick = function(){ automatico = false; render(); scope.send({payload:false}); };\n  document.getElementById('modoOpAuto').onclick = function(){ automatico = true; render(); scope.send({payload:true}); };\n\n  scope.$watch('msg', function(msg){\n    if (!msg || msg.payload === undefined) return;\n    automatico = msg.payload === true;\n    render();\n  });\n\n  render();\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 700,
+        "y": 2300,
+        "wires": [
+            [
+                "cfg_fn_set_modo"
+            ]
+        ]
+    },
+    {
+        "id": "cfg_fn_set_modo",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "431229f8a0ed328e",
+        "name": "Guardar modo de operación",
+        "func": "global.set('modoOperacion', msg.payload === true ? 'automatico' : 'manual');\nreturn null;",
+        "outputs": 0,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1000,
+        "y": 2300,
+        "wires": []
+    },
+    {
+        "id": "cfg_toggle_sim",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "431229f8a0ed328e",
+        "group": "group_config_v2",
+        "name": "Toggle — Modo simulación",
+        "order": 2,
+        "width": 12,
+        "height": 3,
+        "format": "<style>\n.mode-toggle-wrap-sim{ padding:6px 0; font-family:Arial, sans-serif; }\n.mode-toggle-label-sim{ color:#9098a3; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:10px; }\n.mode-toggle-sim{\n  position:relative; display:flex; width:100%; max-width:320px; height:54px;\n  background:#15151a; border:1px solid #24242b; border-radius:27px; cursor:pointer;\n  padding:4px; box-sizing:border-box;\n}\n.mode-toggle-sim .option{\n  flex:1; display:flex; align-items:center; justify-content:center;\n  font-size:14px; font-weight:700; letter-spacing:.5px;\n  color:#767d87; z-index:2; transition:color .25s ease;\n}\n.mode-toggle-sim .option.selected{ color:#0d0d10; }\n.mode-toggle-sim .pill{\n  position:absolute; top:4px; left:4px; width:calc(50% - 4px); height:calc(100% - 8px);\n  background:#26c6da; border-radius:23px; transition:transform .25s ease; z-index:1;\n}\n.mode-toggle-sim .pill.right{ transform:translateX(100%); }\n</style>\n<div class=\"mode-toggle-wrap-sim\">\n  <div class=\"mode-toggle-label-sim\">Fuente de datos</div>\n  <div class=\"mode-toggle-sim\">\n    <div class=\"pill\" id=\"modoSimPill\"></div>\n    <div class=\"option\" id=\"modoSimReal\">DATOS REALES</div>\n    <div class=\"option\" id=\"modoSimSim\">SIMULACIÓN</div>\n  </div>\n</div>\n<script>\n(function(scope){\n  var simulacion = false;\n\n  function render(){\n    document.getElementById('modoSimPill').className = 'pill' + (simulacion ? ' right' : '');\n    document.getElementById('modoSimReal').className = 'option' + (!simulacion ? ' selected' : '');\n    document.getElementById('modoSimSim').className = 'option' + (simulacion ? ' selected' : '');\n  }\n\n  document.getElementById('modoSimReal').onclick = function(){ simulacion = false; render(); scope.send({payload:false}); };\n  document.getElementById('modoSimSim').onclick = function(){ simulacion = true; render(); scope.send({payload:true}); };\n\n  scope.$watch('msg', function(msg){\n    if (!msg || msg.payload === undefined) return;\n    simulacion = msg.payload === true;\n    render();\n  });\n\n  render();\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 710,
+        "y": 2360,
+        "wires": [
+            [
+                "cfg_fn_set_sim"
+            ]
+        ]
+    },
+    {
+        "id": "cfg_fn_set_sim",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "431229f8a0ed328e",
+        "name": "Guardar global.modoSimulacion",
+        "func": "global.set('modoSimulacion', msg.payload === true);\nreturn null;",
+        "outputs": 0,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1020,
+        "y": 2360,
+        "wires": []
+    },
+    {
+        "id": "cfg_limites_form",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "431229f8a0ed328e",
+        "group": "group_config_v2",
+        "name": "Formulario de límites (editar/guardar)",
+        "order": 3,
+        "width": 24,
+        "height": 12,
+        "format": "<style>\n  .cfg-form {\n    font-family: Arial, sans-serif;\n    padding-top: 8px;\n  }\n\n  .cfg-header {\n    display: flex;\n    justify-content: space-between;\n    align-items: center;\n    margin-bottom: 18px;\n  }\n\n  .cfg-title {\n    color: #9098a3;\n    font-size: 12px;\n    text-transform: uppercase;\n    letter-spacing: .5px;\n  }\n\n  .cfg-section {\n    margin-bottom: 18px;\n    padding: 20px;\n    border: 1px solid #24242b;\n    border-radius: 12px;\n    background: #101014;\n  }\n\n  .cfg-section-head {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    margin-bottom: 18px;\n    padding-bottom: 12px;\n    border-bottom: 1px solid #1a1a1f;\n  }\n\n  .cfg-section-icon {\n    width: 34px;\n    height: 34px;\n    flex-shrink: 0;\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    background: #15151a;\n    border: 1px solid #24242b;\n    border-radius: 8px;\n  }\n\n  .cfg-section-name {\n    color: #e8eaed;\n    font-size: 14px;\n    font-weight: 700;\n    letter-spacing: .3px;\n  }\n\n  .cfg-grid {\n    display: grid;\n    grid-template-columns: 1fr 1fr;\n    gap: 22px 32px;\n  }\n\n  .cfg-field label {\n    display: block;\n    color: #9098a3;\n    font-size: 12px;\n    margin-bottom: 6px;\n  }\n\n  .cfg-value {\n    color: #e8eaed;\n    font-size: 17px;\n    font-weight: 600;\n  }\n\n  .cfg-input {\n    width: 100%;\n    background: #15151a;\n    border: 1px solid #24242b;\n    border-radius: 6px;\n    color: #e8eaed;\n    font-size: 14px;\n    padding: 9px 10px;\n    box-sizing: border-box;\n    font-family: Arial;\n  }\n\n  .cfg-input:focus {\n    outline: none;\n    border-color: #26c6da;\n  }\n\n  .cfg-btn {\n    padding: 9px 18px;\n    border-radius: 8px;\n    border: 1px solid #24242b;\n    background: #15151a;\n    color: #9098a3;\n    font-size: 13px;\n    font-weight: 600;\n    letter-spacing: .5px;\n    cursor: pointer;\n    transition: all .2s ease;\n  }\n\n  .cfg-btn:hover {\n    border-color: rgba(38, 198, 218, .4);\n    color: #26c6da;\n  }\n\n  .cfg-btn.primary {\n    background: rgba(38, 198, 218, .12);\n    border-color: rgba(38, 198, 218, .4);\n    color: #26c6da;\n  }\n\n  .cfg-btn.primary:hover {\n    background: rgba(38, 198, 218, .2);\n  }\n\n  .cfg-actions {\n    display: flex;\n    gap: 10px;\n  }\n</style>\n\n<div class=\"cfg-form\">\n  <div class=\"cfg-header\">\n    <div class=\"cfg-title\">Límites de alerta y parámetros de riego</div>\n    <div class=\"cfg-actions\" id=\"cfg-actions\"></div>\n  </div>\n  <div id=\"cfg-secciones\"></div>\n</div>\n\n<script>\n  (function(scope){\n  var iconos = {\n    sustrato: '<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\"><path d=\"M13.2 2.3 L7 15.5 L10.2 15.5 L9.3 21.5 L17 10 L13.2 10 Z\" fill=\"#26c6da\" opacity=\".9\"/></svg>',\n    ambiental: '<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"#ffab40\" stroke-width=\"1.6\"><rect x=\"3.5\" y=\"6\" width=\"17\" height=\"12\" rx=\"2.5\"/><rect x=\"6\" y=\"9\" width=\"9.5\" height=\"5\" rx=\"1\" fill=\"rgba(255,171,64,.15)\" stroke=\"none\"/><circle cx=\"18\" cy=\"11.5\" r=\"0.9\" fill=\"#ffab40\" stroke=\"none\"/></svg>',\n    riego: '<svg viewBox=\"0 0 24 24\" width=\"20\" height=\"20\" fill=\"none\" stroke=\"#4caf50\" stroke-width=\"1.6\"><path d=\"M12 3 C12 3 6 10.5 6 14.5 C6 17.8 8.7 20.5 12 20.5 C15.3 20.5 18 17.8 18 14.5 C18 10.5 12 3 12 3 Z\"/></svg>'\n  };\n\n  var secciones = [\n    {\n      titulo: 'Sensores LoRa — humedad de sustrato',\n      icono: 'sustrato',\n      campos: [\n        { key:'limiteSupHumSustrato', label:'Límite superior de humedad de sustrato (%) — exceso de agua' },\n        { key:'umbralDesviacionSensor', label:'Umbral de desviación entre sensores (puntos %)' },\n        { key:'limiteInfHumSustrato', label:'Límite inferior de humedad de sustrato (%) — muy seco' }\n      ]\n    },\n    {\n      titulo: 'Sensor ambiental — temperatura y humedad',\n      icono: 'ambiental',\n      campos: [\n        { key:'limiteSupTemp', label:'Límite superior de temperatura (°C)' },\n        { key:'limiteInfHumAmb', label:'Límite inferior de humedad ambiente (%)' },\n        { key:'limiteSupHumAmb', label:'Límite superior de humedad ambiente (%)' }\n      ]\n    },\n    {\n      titulo: 'Riego y confirmación de alertas',\n      icono: 'riego',\n      campos: [\n        { key:'limiteTiempoMin', label:'Tiempo sostenido para confirmar (minutos)' },\n        { key:'duracionRiegoSeg', label:'Duración del riego automático (segundos)' },\n        { key:'tiempoEnfriamientoMin', label:'Tiempo de enfriamiento entre riegos (minutos)' },\n        { key:'tiempoMaxAperturaSeg', label:'Tiempo máximo de apertura por seguridad (segundos)' }\n      ]\n    }\n  ];\n\n  var valores = {};\n  var editando = false;\n\n  var cont = document.getElementById('cfg-secciones');\n  var actions = document.getElementById('cfg-actions');\n\n  function renderActions(){\n    if (editando) {\n      actions.innerHTML =\n        '<div class=\"cfg-btn\" id=\"cfg-cancelar\">Cancelar</div>' +\n        '<div class=\"cfg-btn primary\" id=\"cfg-guardar\">Guardar cambios</div>';\n      document.getElementById('cfg-cancelar').onclick = function(){ editando = false; render(); };\n      document.getElementById('cfg-guardar').onclick = guardar;\n    } else {\n      actions.innerHTML = '<div class=\"cfg-btn primary\" id=\"cfg-editar\">Editar</div>';\n      document.getElementById('cfg-editar').onclick = function(){ editando = true; render(); };\n    }\n  }\n\n  function render(){\n    var html = '';\n    secciones.forEach(function(sec){\n      html += '<div class=\"cfg-section\">' +\n        '<div class=\"cfg-section-head\"><div class=\"cfg-section-icon\">' + iconos[sec.icono] + '</div>' +\n        '<div class=\"cfg-section-name\">' + sec.titulo + '</div></div>' +\n        '<div class=\"cfg-grid\">';\n      sec.campos.forEach(function(c){\n        var val = valores[c.key] !== undefined ? valores[c.key] : '';\n        html += '<div class=\"cfg-field\"><label>' + c.label + '</label>';\n        if (editando) {\n          html += '<input class=\"cfg-input\" type=\"number\" id=\"input-' + c.key + '\" value=\"' + val + '\">';\n        } else {\n          html += '<div class=\"cfg-value\">' + val + '</div>';\n        }\n        html += '</div>';\n      });\n      html += '</div></div>';\n    });\n    cont.innerHTML = html;\n    renderActions();\n  }\n\n  function guardar(){\n    var payload = {};\n    secciones.forEach(function(sec){\n      sec.campos.forEach(function(c){\n        var el = document.getElementById('input-' + c.key);\n        var num = Number(el.value);\n        if (!isNaN(num)) {\n          payload[c.key] = num;\n          valores[c.key] = num;\n        }\n      });\n    });\n    editando = false;\n    render();\n    scope.send({ payload: payload });\n  }\n\n  scope.$watch('msg', function(msg){\n    if (!msg || !msg.payload) return;\n    valores = msg.payload;\n    if (!editando) render();\n  });\n\n  render();\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 700,
+        "y": 2480,
+        "wires": [
+            [
+                "cfg_fn_guardar_limites"
+            ]
+        ]
+    },
+    {
+        "id": "cfg_fn_guardar_limites",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "431229f8a0ed328e",
+        "name": "Guardar todos los límites",
+        "func": "const cambios = msg.payload || {};\nObject.keys(cambios).forEach(function(clave){\n    global.set(clave, cambios[clave]);\n});\nreturn null;",
+        "outputs": 0,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1020,
+        "y": 2480,
+        "wires": []
+    },
+    {
+        "id": "cfg_inject_cargar",
+        "type": "inject",
+        "z": "2ac18697561110b7",
+        "g": "431229f8a0ed328e",
+        "name": "Cargar valores actuales al abrir",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "2",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 700,
+        "y": 2580,
+        "wires": [
+            [
+                "cfg_fn_cargar_valores"
+            ]
+        ]
+    },
+    {
+        "id": "cfg_fn_cargar_valores",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "431229f8a0ed328e",
+        "name": "Reflejar valores guardados en la interfaz",
+        "func": "const defaults = {\n    modoOperacion: 'automatico',\n    modoSimulacion: false,\n    limiteSupTemp: 28,\n    limiteTiempoMin: 15,\n    limiteInfHumAmb: 40,\n    limiteSupHumAmb: 80,\n    limiteInfHumSustrato: 25,\n    limiteSupHumSustrato: 70,\n    umbralDesviacionSensor: 15,\n    duracionRiegoSeg: 30,\n    tiempoEnfriamientoMin: 60,\n    tiempoMaxAperturaSeg: 180\n};\nObject.keys(defaults).forEach(function(clave){\n    if (global.get(clave) === undefined) {\n        global.set(clave, defaults[clave]);\n    }\n});\n\nconst limites = {\n    limiteSupTemp: global.get('limiteSupTemp'),\n    limiteTiempoMin: global.get('limiteTiempoMin'),\n    limiteInfHumAmb: global.get('limiteInfHumAmb'),\n    limiteSupHumAmb: global.get('limiteSupHumAmb'),\n    limiteInfHumSustrato: global.get('limiteInfHumSustrato'),\n    limiteSupHumSustrato: global.get('limiteSupHumSustrato'),\n    umbralDesviacionSensor: global.get('umbralDesviacionSensor'),\n    duracionRiegoSeg: global.get('duracionRiegoSeg'),\n    tiempoEnfriamientoMin: global.get('tiempoEnfriamientoMin'),\n    tiempoMaxAperturaSeg: global.get('tiempoMaxAperturaSeg')\n};\n\nreturn [\n    { payload: global.get('modoOperacion') === 'automatico' },\n    { payload: global.get('modoSimulacion') },\n    { payload: limites }\n];",
+        "outputs": 3,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 1030,
+        "y": 2580,
+        "wires": [
+            [
+                "cfg_toggle_modo"
+            ],
+            [
+                "cfg_toggle_sim"
+            ],
+            [
+                "cfg_limites_form"
+            ]
+        ]
+    },
+    {
+        "id": "group_config_v2",
+        "type": "ui_group",
+        "name": "Configuración",
+        "tab": "tab_config_v2",
+        "order": 1,
+        "disp": false,
+        "width": 24,
+        "collapse": false
+    },
+    {
+        "id": "tab_config_v2",
+        "type": "ui_tab",
+        "name": "Configuración",
+        "icon": "dashboard",
+        "order": 7,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "9f8de6fe0afe1be3",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "rie_comment01",
+            "rie_inject_eval",
+            "rie_fn_evaluar",
+            "rie_fn_manual",
+            "rie_template_control"
+        ],
+        "x": 74,
+        "y": 3019,
+        "w": 1272,
+        "h": 262
+    },
+    {
+        "id": "rie_comment01",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "9f8de6fe0afe1be3",
+        "name": "Página 9 - CONTROL DE RIEGO (electroválvula — simulado, sin hardware aún)",
+        "info": "Va en Configuración, debajo del formulario de parámetros. Importa este archivo aparte del 7 (no lo reemplaza). La válvula es virtual por ahora (global.estadoValvula) — cuando conectes el hardware real, solo hay que agregar un nodo de salida (mqtt out o rpi-gpio out) que lea ese mismo estado.",
+        "x": 380,
+        "y": 3060,
+        "wires": []
+    },
+    {
+        "id": "rie_inject_eval",
+        "type": "inject",
+        "z": "2ac18697561110b7",
+        "g": "9f8de6fe0afe1be3",
+        "name": "Cada 10s, evaluar riego",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "10",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "5",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 660,
+        "y": 3140,
+        "wires": [
+            [
+                "rie_fn_evaluar"
+            ]
+        ]
+    },
+    {
+        "id": "rie_fn_evaluar",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "9f8de6fe0afe1be3",
+        "name": "Evaluar y controlar riego automático",
+        "func": "const modoOperacion = global.get('modoOperacion') || 'automatico';\nconst sensores = global.get('sensoresLora') || {};\nconst limiteInfHumSustrato = global.get('limiteInfHumSustrato') ?? 25;\nconst duracionRiegoSeg = global.get('duracionRiegoSeg') ?? 30;\nconst tiempoEnfriamientoMin = global.get('tiempoEnfriamientoMin') ?? 60;\nconst tiempoMaxAperturaSeg = global.get('tiempoMaxAperturaSeg') ?? 180;\n\nconst ahora = Date.now();\nlet estado = global.get('estadoValvula') || { abierta: false, origen: null, inicioApertura: null, ultimoCierre: null, motivo: 'Sin actividad todavía' };\n\n// 1) Seguridad: cierre forzado si excede el tiempo máximo, sin importar modo u origen\nif (estado.abierta && estado.inicioApertura && (ahora - estado.inicioApertura) >= tiempoMaxAperturaSeg * 1000) {\n    estado.abierta = false;\n    estado.ultimoCierre = ahora;\n    estado.motivo = 'Cerrada por seguridad (superó ' + tiempoMaxAperturaSeg + 's abierta)';\n    estado.origen = null;\n}\n\n// 2) Cierre normal del riego automático al cumplir la duración configurada\nif (estado.abierta && estado.origen === 'automatico' && estado.inicioApertura && (ahora - estado.inicioApertura) >= duracionRiegoSeg * 1000) {\n    estado.abierta = false;\n    estado.ultimoCierre = ahora;\n    estado.motivo = 'Riego automático completado (' + duracionRiegoSeg + 's)';\n    estado.origen = null;\n}\n\n// 3) Disparo automático si corresponde\nif (modoOperacion === 'automatico' && !estado.abierta) {\n    const valores = Object.values(sensores).map(function(s){ return s.humedad; }).filter(function(v){ return typeof v === 'number'; });\n    if (valores.length > 0) {\n        const promedio = valores.reduce(function(a, b){ return a + b; }, 0) / valores.length;\n        const enEnfriamiento = estado.ultimoCierre && (ahora - estado.ultimoCierre) < tiempoEnfriamientoMin * 60 * 1000;\n\n        if (promedio < limiteInfHumSustrato && !enEnfriamiento) {\n            estado.abierta = true;\n            estado.origen = 'automatico';\n            estado.inicioApertura = ahora;\n            estado.motivo = 'Riego automático — promedio ' + promedio.toFixed(1) + '% bajo el límite ' + limiteInfHumSustrato + '%';\n        }\n    }\n}\n\nglobal.set('estadoValvula', estado);\n\nmsg.payload = Object.assign({}, estado, { modoOperacion: modoOperacion });\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 950,
+        "y": 3140,
+        "wires": [
+            [
+                "rie_template_control"
+            ]
+        ]
+    },
+    {
+        "id": "rie_fn_manual",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "9f8de6fe0afe1be3",
+        "name": "Procesar comando manual",
+        "func": "const modoOperacion = global.get('modoOperacion') || 'automatico';\n\nif (modoOperacion !== 'manual') {\n    node.warn('Comando manual ignorado: el sistema está en modo automático');\n    return null;\n}\n\nlet estado = global.get('estadoValvula') || { abierta: false, origen: null, inicioApertura: null, ultimoCierre: null, motivo: '' };\nconst ahora = Date.now();\n\nif (msg.payload === 'abrir') {\n    estado.abierta = true;\n    estado.origen = 'manual';\n    estado.inicioApertura = ahora;\n    estado.motivo = 'Abierta manualmente';\n} else if (msg.payload === 'cerrar') {\n    estado.abierta = false;\n    estado.origen = null;\n    estado.ultimoCierre = ahora;\n    estado.motivo = 'Cerrada manualmente';\n}\n\nglobal.set('estadoValvula', estado);\n\nmsg.payload = Object.assign({}, estado, { modoOperacion: modoOperacion });\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 970,
+        "y": 3240,
+        "wires": [
+            [
+                "rie_template_control"
+            ]
+        ]
+    },
+    {
+        "id": "rie_template_control",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "9f8de6fe0afe1be3",
+        "group": "group_config_v2",
+        "name": "Control de riego",
+        "order": 4,
+        "width": 24,
+        "height": 6,
+        "format": "<style>\n.rc-wrap{ font-family:Arial, sans-serif; padding-top:8px; }\n.rc-title{ color:#9098a3; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:14px; }\n.rc-row{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:16px; }\n.rc-status{ display:flex; align-items:center; gap:14px; }\n.rc-badge{\n  font-size:13px; font-weight:700; padding:8px 18px; border-radius:20px;\n  letter-spacing:.5px; text-transform:uppercase;\n}\n.rc-badge.abierta{ background:rgba(38,198,218,.15); color:#26c6da; border:1px solid rgba(38,198,218,.4); }\n.rc-badge.cerrada{ background:#15151a; color:#767d87; border:1px solid #24242b; }\n.rc-motivo{ color:#9098a3; font-size:13px; }\n.rc-buttons{ display:flex; gap:10px; }\n.rc-btn{\n  padding:10px 20px; border-radius:8px; border:1px solid #24242b; background:#15151a;\n  color:#9098a3; font-size:13px; font-weight:600; letter-spacing:.5px; cursor:pointer;\n  transition:all .2s ease;\n}\n.rc-btn.open:hover{ border-color:rgba(38,198,218,.4); color:#26c6da; }\n.rc-btn.close:hover{ border-color:rgba(229,115,115,.4); color:#e57373; }\n.rc-btn.disabled{ opacity:.35; cursor:not-allowed; pointer-events:none; }\n.rc-note{ color:#5c636d; font-size:11px; margin-top:8px; }\n</style>\n\n<div class=\"rc-wrap\">\n  <div class=\"rc-title\">Control de riego (electroválvula)</div>\n  <div class=\"rc-row\">\n    <div class=\"rc-status\">\n      <div class=\"rc-badge\" id=\"rc-badge\">Cerrada</div>\n      <div class=\"rc-motivo\" id=\"rc-motivo\">Sin actividad todavía</div>\n    </div>\n    <div class=\"rc-buttons\">\n      <div class=\"rc-btn open\" id=\"rc-abrir\">Abrir ahora</div>\n      <div class=\"rc-btn close\" id=\"rc-cerrar\">Cerrar ahora</div>\n    </div>\n  </div>\n  <div class=\"rc-note\" id=\"rc-nota\"></div>\n</div>\n\n<script>\n(function(scope){\n  var badge = document.getElementById('rc-badge');\n  var motivo = document.getElementById('rc-motivo');\n  var btnAbrir = document.getElementById('rc-abrir');\n  var btnCerrar = document.getElementById('rc-cerrar');\n  var nota = document.getElementById('rc-nota');\n\n  function render(estado){\n    badge.textContent = estado.abierta ? 'Abierta' : 'Cerrada';\n    badge.className = 'rc-badge ' + (estado.abierta ? 'abierta' : 'cerrada');\n    motivo.textContent = estado.motivo || '';\n\n    var esManual = estado.modoOperacion === 'manual';\n    btnAbrir.className = 'rc-btn open' + (esManual ? '' : ' disabled');\n    btnCerrar.className = 'rc-btn close' + (esManual ? '' : ' disabled');\n    nota.textContent = esManual ? '' : 'Los botones manuales solo funcionan en modo Manual (cámbialo arriba).';\n  }\n\n  btnAbrir.onclick = function(){ scope.send({ payload: 'abrir' }); };\n  btnCerrar.onclick = function(){ scope.send({ payload: 'cerrar' }); };\n\n  scope.$watch('msg', function(msg){\n    if (!msg || !msg.payload) return;\n    render(msg.payload);\n  });\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 1240,
+        "y": 3180,
+        "wires": [
+            [
+                "rie_fn_manual"
+            ]
+        ]
+    },
+    {
+        "id": "b047fa1a8bf220d3",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "rep_comment01",
+            "rep_inject_log",
+            "rep_fn_armar_fila",
+            "rep_csv_fila",
+            "rep_fn_ruta_log",
+            "rep_file_append",
+            "rep_form_template",
+            "rep_fn_filtrar",
+            "rep_file_leer",
+            "rep_fn_recortar",
+            "rep_fn_prueba",
+            "rep_fn_armar_correo",
+            "rep_fn_aviso_ok",
+            "rep_email_out"
+        ],
+        "x": 54,
+        "y": 3339,
+        "w": 1102,
+        "h": 702
+    },
+    {
+        "id": "rep_comment01",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Página 10 - REPORTES POR CORREO — logger CSV cada 15 min + envío por rango",
+        "info": "Va en la página Historial. Reutiliza el patrón del nodo e-mail que ya tenías funcionando en otro proyecto (Gmail SMTP). IMPORTANTE: al importar el nodo 'Envío mail', ábrelo y escribe tu usuario/contraseña de Gmail — esos datos no vienen en el JSON por seguridad, hay que ponerlos a mano. Ajusta también la carpeta donde se guarda el CSV (ahora mismo apunta a una carpeta 'reportes' dentro de tu proyecto de Node-RED, cámbiala si prefieres otra ubicación).",
+        "x": 380,
+        "y": 3380,
+        "wires": []
+    },
+    {
+        "id": "rep_inject_log",
+        "type": "inject",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Cada 15 min, guardar una fila",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "900",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "10",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 640,
+        "y": 3460,
+        "wires": [
+            [
+                "rep_fn_armar_fila"
+            ]
+        ]
+    },
+    {
+        "id": "rep_fn_armar_fila",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Armo la fila con los datos actuales",
+        "func": "// Tomo lo que hay guardado ahorita de sensores y ambiente\nconst sensores = global.get('sensoresLora') || {};\nconst ambiental = global.get('ambiental') || {};\n\nconst ahora = new Date();\nconst fecha = ahora.toLocaleDateString('es-GT');\nconst hora = ahora.toLocaleTimeString('es-GT');\n\n// Armo un objeto plano, una columna por cada dato\n// (si algún sensor no tiene lectura todavía, dejo vacío en vez de tronar)\nconst fila = {\n    Fecha: fecha,\n    Hora: hora,\n    Sensor1: sensores['1'] ? sensores['1'].humedad : '',\n    Sensor2: sensores['2'] ? sensores['2'].humedad : '',\n    Sensor3: sensores['3'] ? sensores['3'].humedad : '',\n    Sensor4: sensores['4'] ? sensores['4'].humedad : '',\n    Sensor5: sensores['5'] ? sensores['5'].humedad : '',\n    Sensor6: sensores['6'] ? sensores['6'].humedad : '',\n    TemperaturaAmb: ambiental.temperatura !== undefined ? ambiental.temperatura : '',\n    HumedadAmb: ambiental.humedad !== undefined ? ambiental.humedad : ''\n};\n\nmsg.payload = fila;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 910,
+        "y": 3460,
+        "wires": [
+            [
+                "rep_csv_fila"
+            ]
+        ]
+    },
+    {
+        "id": "rep_csv_fila",
+        "type": "csv",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Convierto la fila a texto CSV",
+        "sep": ",",
+        "hdrin": false,
+        "hdrout": "none",
+        "multi": "one",
+        "ret": "\n",
+        "temp": "Fecha,Hora,Sensor1,Sensor2,Sensor3,Sensor4,Sensor5,Sensor6,TemperaturaAmb,HumedadAmb",
+        "skip": "0",
+        "strings": true,
+        "include_empty_strings": true,
+        "include_null_values": false,
+        "x": 910,
+        "y": 3520,
+        "wires": [
+            [
+                "rep_fn_ruta_log"
+            ]
+        ]
+    },
+    {
+        "id": "rep_fn_ruta_log",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Le pongo la ruta del archivo permanente",
+        "func": "// Uso siempre el mismo archivo para ir acumulando historial\n// (cámbiala si quieres guardarlo en otra carpeta de tu compu)\nmsg.filename = 'C:/Users/Lis/.node-red/reportes/historial_orquideario.csv';\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 910,
+        "y": 3580,
+        "wires": [
+            [
+                "rep_file_append"
+            ]
+        ]
+    },
+    {
+        "id": "rep_file_append",
+        "type": "file",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Voy agregando al final del archivo",
+        "filename": "filename",
+        "filenameType": "msg",
+        "appendNewline": true,
+        "createDir": true,
+        "overwriteFile": "false",
+        "encoding": "none",
+        "x": 910,
+        "y": 3640,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "rep_form_template",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "group": "group_historial_v2",
+        "name": "Enviar reporte por correo",
+        "order": 1,
+        "width": 24,
+        "height": 2,
+        "format": "<style>\n.rep-wrap{ font-family:Arial, sans-serif; padding-top:10px; }\n.rep-title{ color:#9098a3; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:14px; }\n.rep-row{ display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap; }\n.rep-field label{ display:block; color:#9098a3; font-size:12px; margin-bottom:6px; }\n.rep-input, .rep-select{\n  background:#15151a; border:1px solid #24242b; border-radius:6px; color:#e8eaed;\n  font-size:14px; padding:9px 10px; box-sizing:border-box; font-family:Arial; width:260px;\n}\n.rep-input:focus, .rep-select:focus{ outline:none; border-color:#26c6da; }\n.rep-btn{\n  padding:10px 20px; border-radius:8px; border:1px solid rgba(38,198,218,.4);\n  background:rgba(38,198,218,.12); color:#26c6da; font-size:13px; font-weight:600;\n  letter-spacing:.5px; cursor:pointer; transition:all .2s ease;\n}\n.rep-btn:hover{ background:rgba(38,198,218,.2); }\n.rep-btn.secundario{ border-color:#24242b; background:#15151a; color:#9098a3; }\n.rep-btn.secundario:hover{ border-color:rgba(255,202,40,.4); color:#ffca28; background:rgba(255,202,40,.08); }\n.rep-status{ margin-top:12px; font-size:12px; color:#9098a3; font-family:Arial; }\n</style>\n\n<div class=\"rep-wrap\">\n  <div class=\"rep-title\">Enviar reporte de historial por correo</div>\n  <div class=\"rep-row\">\n    <div class=\"rep-field\">\n      <label>Correo destino</label>\n      <input class=\"rep-input\" type=\"email\" id=\"rep-correo\" placeholder=\"nombre@correo.com\">\n    </div>\n    <div class=\"rep-field\">\n      <label>Rango de datos</label>\n      <select class=\"rep-select\" id=\"rep-rango\">\n        <option value=\"7\">Últimos 7 días</option>\n        <option value=\"15\" selected>Últimos 15 días</option>\n        <option value=\"30\">Último mes</option>\n      </select>\n    </div>\n    <div class=\"rep-btn\" id=\"rep-enviar\">Enviar reporte</div>\n    <div class=\"rep-btn secundario\" id=\"rep-prueba\">Enviar prueba</div>\n  </div>\n  <div class=\"rep-status\" id=\"rep-status\"></div>\n</div>\n\n<script>\n(function(scope){\n  var status = document.getElementById('rep-status');\n\n  function validarCorreo(){\n    var correo = document.getElementById('rep-correo').value.trim();\n    if (!correo || correo.indexOf('@') === -1) {\n      status.textContent = 'Escribe un correo válido antes de enviar.';\n      status.style.color = '#e57373';\n      return null;\n    }\n    return correo;\n  }\n\n  document.getElementById('rep-enviar').onclick = function(){\n    var correo = validarCorreo();\n    if (!correo) return;\n    var rango = document.getElementById('rep-rango').value;\n    status.textContent = 'Generando y enviando reporte...';\n    status.style.color = '#9098a3';\n    scope.send({ payload: { correo: correo, dias: Number(rango), prueba: false } });\n  };\n\n  document.getElementById('rep-prueba').onclick = function(){\n    var correo = validarCorreo();\n    if (!correo) return;\n    status.textContent = 'Enviando correo de prueba...';\n    status.style.color = '#9098a3';\n    scope.send({ payload: { correo: correo, dias: 0, prueba: true } });\n  };\n\n  scope.$watch('msg', function(msg){\n    if (!msg || !msg.payload) return;\n    status.textContent = msg.payload.texto || '';\n    status.style.color = msg.payload.ok ? '#4caf50' : '#e57373';\n  });\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 660,
+        "y": 3760,
+        "wires": [
+            [
+                "rep_fn_filtrar"
+            ]
+        ]
+    },
+    {
+        "id": "rep_fn_filtrar",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Leo el CSV completo y filtro el rango pedido",
+        "func": "// Guardo el correo y los días pedidos dentro del mismo mensaje\n// (así viajan solos hasta el nodo que arma el correo, sin depender\n// de contexto compartido entre nodos distintos)\nmsg.correoDestino = msg.payload.correo;\nmsg.diasPedidos = msg.payload.dias;\n\nif (msg.payload.prueba) {\n    // Es solo una prueba: no hace falta leer el archivo,\n    // me voy directo a armar un correo simple\n    msg.esPrueba = true;\n    return [null, msg];\n}\n\nmsg.filename = 'C:/Users/Lis/.node-red/reportes/historial_orquideario.csv';\nreturn [msg, null];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 960,
+        "y": 3760,
+        "wires": [
+            [
+                "rep_file_leer"
+            ],
+            [
+                "rep_fn_prueba"
+            ]
+        ]
+    },
+    {
+        "id": "rep_file_leer",
+        "type": "file in",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Leo el archivo completo",
+        "filename": "filename",
+        "filenameType": "msg",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": true,
+        "encoding": "none",
+        "allProps": false,
+        "x": 660,
+        "y": 3820,
+        "wires": [
+            [
+                "rep_fn_recortar"
+            ]
+        ]
+    },
+    {
+        "id": "rep_fn_recortar",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Me quedo solo con las filas del rango pedido",
+        "func": "// Si el archivo no existe todavía o está vacío, aviso y corto aquí\nif (!msg.payload) {\n    return [null, { payload: { ok: false, texto: 'Todavía no hay suficiente historial guardado para generar un reporte.' } }];\n}\n\nconst dias = msg.diasPedidos || 15;\nconst limite = Date.now() - (dias * 24 * 60 * 60 * 1000);\n\nconst encabezado = 'Fecha,Hora,Sensor1,Sensor2,Sensor3,Sensor4,Sensor5,Sensor6,TemperaturaAmb,HumedadAmb\\n';\nconst lineas = msg.payload.split('\\n').filter(function(l){ return l.trim() !== ''; });\n\n// Cada línea empieza con la fecha en formato dd/mm/aaaa (según toLocaleDateString de Guatemala)\n// la convierto a fecha real para poder comparar contra el límite de días\nconst filtradas = lineas.filter(function(linea){\n    const partes = linea.split(',');\n    const fechaTexto = partes[0]; // dd/mm/aaaa\n    const horaTexto = partes[1] || '00:00:00';\n    const trozos = fechaTexto.split('/');\n    if (trozos.length !== 3) return false;\n    const fechaLinea = new Date(trozos[2] + '-' + trozos[1] + '-' + trozos[0] + ' ' + horaTexto);\n    return fechaLinea.getTime() >= limite;\n});\n\nif (filtradas.length === 0) {\n    return [null, { payload: { ok: false, texto: 'No hay datos guardados dentro de ese rango todavía.' } }];\n}\n\nmsg.payload = encabezado + filtradas.join('\\n');\nmsg.dias = dias;\nreturn [msg, null];",
+        "outputs": 2,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 660,
+        "y": 3880,
+        "wires": [
+            [
+                "rep_fn_armar_correo"
+            ],
+            [
+                "rep_form_template"
+            ]
+        ]
+    },
+    {
+        "id": "rep_fn_prueba",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Armo un mensaje simple de prueba",
+        "func": "// No necesito datos reales aquí, solo confirmar que el envío funciona\nmsg.payload = 'Fecha,Hora,Sensor1,Sensor2,Sensor3,Sensor4,Sensor5,Sensor6,TemperaturaAmb,HumedadAmb\\n(correo de prueba, sin datos todavía)';\nmsg.dias = 0;\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 660,
+        "y": 4000,
+        "wires": [
+            [
+                "rep_fn_armar_correo"
+            ]
+        ]
+    },
+    {
+        "id": "rep_fn_armar_correo",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Armo el correo con el CSV adjunto",
+        "func": "// Saco la fecha de hoy para ponerla en el asunto y en el nombre del archivo\nconst ahora = new Date();\nconst fecha = ahora.toLocaleDateString('es-GT').split('/').join('-');\n\nconst correoDestino = msg.correoDestino;\nconst dias = msg.dias;\nconst esPrueba = msg.esPrueba === true;\n\nconst asunto = esPrueba\n    ? 'Prueba de envío — Orquideario UVG'\n    : 'Reporte de Monitoreo — Orquideario UVG (' + dias + ' días) — ' + fecha;\n\nconst texto = esPrueba\n    ? 'Este es un correo de prueba para confirmar que el envío de reportes está funcionando correctamente.'\n    : 'Se adjunta el reporte de monitoreo del Orquideario UVG correspondiente a los últimos ' + dias + ' días.';\n\nconst nombreArchivo = esPrueba\n    ? 'Prueba_Orquideario_UVG_' + fecha + '.csv'\n    : 'Reporte_Orquideario_UVG_' + dias + 'dias_' + fecha + '.csv';\n\nconst contenidoCsv = msg.payload;\n\nmsg = {\n    to: correoDestino,\n    topic: asunto,\n    payload: texto,\n    attachments: [\n        {\n            filename: nombreArchivo,\n            content: contenidoCsv\n        }\n    ]\n};\n\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 660,
+        "y": 3940,
+        "wires": [
+            [
+                "rep_email_out",
+                "rep_fn_aviso_ok"
+            ]
+        ]
+    },
+    {
+        "id": "rep_fn_aviso_ok",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "name": "Preparo el aviso de éxito",
+        "func": "return { payload: { ok: true, texto: 'Reporte enviado a ' + msg.to } };",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 670,
+        "y": 4000,
+        "wires": [
+            [
+                "rep_form_template"
+            ]
+        ]
+    },
+    {
+        "id": "rep_email_out",
+        "type": "e-mail",
+        "z": "2ac18697561110b7",
+        "g": "b047fa1a8bf220d3",
+        "server": "smtp.gmail.com",
+        "port": "465",
+        "authtype": "BASIC",
+        "saslformat": true,
+        "secure": true,
+        "tls": true,
+        "name": "",
+        "dname": "Envío mail — reportes Orquideario",
+        "x": 960,
+        "y": 3940,
+        "wires": []
+    },
+    {
+        "id": "8364f2f12974c554",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "mapa_comment01",
+            "mapa_inject_iniciar",
+            "mapa_fn_defaults",
+            "mapa_file_leer_pos",
+            "mapa_fn_parse_pos",
+            "mapa_inject_valores",
+            "mapa_fn_valores",
+            "mapa_fn_guardar",
+            "mapa_file_escribir_pos",
+            "mapa_template"
+        ],
+        "x": 2124,
+        "y": 599,
+        "w": 972,
+        "h": 442
+    },
+    {
+        "id": "mapa_comment01",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "8364f2f12974c554",
+        "name": "Página 12 — Mapa de Sensores",
+        "info": "Borra el placeholder 'Mapa de Sensores — contenido pendiente'. IMPORTANTE: ajusta la ruta de la imagen en el nodo 'Le pongo la ruta de la imagen del mapa' a donde tengas guardada la foto/plano de tu área de orquídeas. Si no tienes esa imagen todavía, el mapa igual funciona (los pines quedan sobre fondo oscuro), solo que sin la referencia visual del espacio real.",
+        "x": 2310,
+        "y": 640,
+        "wires": []
+    },
+    {
+        "id": "mapa_inject_iniciar",
+        "type": "inject",
+        "z": "2ac18697561110b7",
+        "g": "8364f2f12974c554",
+        "name": "Al iniciar, cargo posiciones guardadas",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "2",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 2320,
+        "y": 700,
+        "wires": [
+            [
+                "mapa_fn_defaults"
+            ]
+        ]
+    },
+    {
+        "id": "mapa_fn_defaults",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "8364f2f12974c554",
+        "name": "Pongo posiciones por defecto si no hay nada guardado",
+        "func": "if (!global.get('posicionesSensores')) {\n    global.set('posicionesSensores', {\n        1: { x: 15, y: 13 },\n        2: { x: 15, y: 27 },\n        3: { x: 15, y: 52 },\n        4: { x: 15, y: 66 },\n        5: { x: 15, y: 80 },\n        6: { x: 85, y: 13 },\n        ambiental: { x: 50, y: 4 }\n    });\n}\nmsg.filename = 'C:/Users/Lis/.node-red/reportes/posiciones_mapa.json';\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2620,
+        "y": 700,
+        "wires": [
+            [
+                "mapa_file_leer_pos"
+            ]
+        ]
+    },
+    {
+        "id": "mapa_file_leer_pos",
+        "type": "file in",
+        "z": "2ac18697561110b7",
+        "g": "8364f2f12974c554",
+        "name": "Leo el archivo de posiciones guardadas",
+        "filename": "filename",
+        "filenameType": "msg",
+        "format": "utf8",
+        "chunk": false,
+        "sendError": true,
+        "encoding": "none",
+        "allProps": false,
+        "x": 2330,
+        "y": 760,
+        "wires": [
+            [
+                "mapa_fn_parse_pos"
+            ]
+        ]
+    },
+    {
+        "id": "mapa_fn_parse_pos",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "8364f2f12974c554",
+        "name": "Si el archivo existe, uso esas posiciones",
+        "func": "if (msg.payload) {\n    try {\n        const posiciones = JSON.parse(msg.payload);\n        global.set('posicionesSensores', posiciones);\n    } catch (e) {\n        node.warn('El archivo de posiciones estaba dañado, uso los valores por defecto');\n    }\n}\n\nconst sensores = global.get('sensoresLora') || {};\nconst ambiental = global.get('ambiental') || {};\nconst valores = {};\nObject.keys(sensores).forEach(function(id){\n    valores[id] = sensores[id].humedad;\n});\nvalores.ambiental = {\n    temperatura: ambiental.temperatura,\n    humedad: ambiental.humedad\n};\n\n// Mando posiciones Y valores juntos en el mismo mensaje. Así, sin importar\n// cuál fue el último mensaje que Node-RED recordó para cuando el usuario\n// vuelva a esta pestaña, siempre trae todo lo necesario para dibujarse\n// completo -- no depende de que lleguen dos mensajes distintos por separado.\nmsg.payload = { posiciones: global.get('posicionesSensores'), valores: valores };\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2630,
+        "y": 760,
+        "wires": [
+            [
+                "mapa_template"
+            ]
+        ]
+    },
+    {
+        "id": "mapa_inject_valores",
+        "type": "inject",
+        "z": "2ac18697561110b7",
+        "g": "8364f2f12974c554",
+        "name": "Cada 15s, actualizo los valores",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "15",
+        "crontab": "",
+        "once": true,
+        "onceDelay": "5",
+        "topic": "",
+        "payload": "",
+        "payloadType": "date",
+        "x": 2320,
+        "y": 820,
+        "wires": [
+            [
+                "mapa_fn_valores"
+            ]
+        ]
+    },
+    {
+        "id": "mapa_fn_valores",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "8364f2f12974c554",
+        "name": "Armo los valores actuales de cada sensor",
+        "func": "const sensores = global.get('sensoresLora') || {};\nconst ambiental = global.get('ambiental') || {};\n\nconst valores = {};\nObject.keys(sensores).forEach(function(id){\n    valores[id] = sensores[id].humedad;\n});\nvalores.ambiental = {\n    temperatura: ambiental.temperatura,\n    humedad: ambiental.humedad\n};\n\n// Mando también las posiciones actuales junto con los valores, por la\n// misma razón: que cualquier mensaje, sea el que sea, traiga todo el\n// estado completo del mapa.\nmsg.payload = { posiciones: global.get('posicionesSensores'), valores: valores };\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2620,
+        "y": 820,
+        "wires": [
+            [
+                "mapa_template"
+            ]
+        ]
+    },
+    {
+        "id": "mapa_fn_guardar",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "8364f2f12974c554",
+        "name": "Guardo las posiciones nuevas",
+        "func": "global.set('posicionesSensores', msg.payload.posiciones);\nmsg.payload = JSON.stringify(msg.payload.posiciones, null, 2);\nmsg.filename = 'C:/Users/Lis/.node-red/reportes/posiciones_mapa.json';\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2880,
+        "y": 940,
+        "wires": [
+            [
+                "mapa_file_escribir_pos"
+            ]
+        ]
+    },
+    {
+        "id": "mapa_file_escribir_pos",
+        "type": "file",
+        "z": "2ac18697561110b7",
+        "g": "8364f2f12974c554",
+        "name": "Escribo el archivo de posiciones",
+        "filename": "filename",
+        "filenameType": "msg",
+        "appendNewline": false,
+        "createDir": true,
+        "overwriteFile": "true",
+        "encoding": "none",
+        "x": 2880,
+        "y": 1000,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "mapa_template",
+        "type": "ui_template",
+        "z": "2ac18697561110b7",
+        "g": "8364f2f12974c554",
+        "group": "group_mapa_v2",
+        "name": "Mapa de sensores",
+        "order": 1,
+        "width": 24,
+        "height": 24,
+        "format": "<style>\n.mapa-wrap{ font-family:Arial, sans-serif; }\n.mapa-toolbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }\n.mapa-titulo{ color:#9098a3; font-size:12px; text-transform:uppercase; letter-spacing:.5px; }\n.mapa-btn{\n  padding:9px 18px; border-radius:8px; border:1px solid #24242b; background:#15151a;\n  color:#9098a3; font-size:13px; font-weight:600; letter-spacing:.5px; cursor:pointer;\n  transition:all .2s ease;\n}\n.mapa-btn:hover{ border-color:rgba(38,198,218,.4); color:#26c6da; }\n.mapa-btn.activo{ background:rgba(38,198,218,.15); border-color:rgba(38,198,218,.5); color:#26c6da; }\n.mapa-btn.guardar{ background:rgba(76,175,80,.12); border-color:rgba(76,175,80,.4); color:#4caf50; }\n.mapa-container{ position:relative; width:100%; height:820px; border-radius:10px; overflow:hidden; background:#0d0d10; border:1px solid #24242b; display:flex; justify-content:center; }\n.mapa-plano{ height:100%; width:auto; display:block; }\n.mapa-pin{\n  position:absolute; transform:translate(-50%, -100%); display:flex; flex-direction:column;\n  align-items:center; cursor:default; user-select:none;\n}\n.mapa-pin.editando{ cursor:grab; }\n.mapa-pin.arrastrando{ cursor:grabbing; }\n.mapa-pin-dot{\n  width:14px; height:14px; border-radius:50%; border:2px solid #0d0d10;\n  box-shadow:0 0 0 2px currentColor;\n}\n.mapa-pin.sustrato .mapa-pin-dot{ background:#26c6da; color:#26c6da; }\n.mapa-pin.ambiental .mapa-pin-dot{ background:#ffab40; color:#ffab40; }\n.mapa-pin-card{\n  margin-top:6px; background:#15151a; border:1px solid #24242b; border-radius:8px;\n  padding:6px 10px; text-align:center; white-space:nowrap;\n}\n.mapa-pin-nombre{ color:#e8eaed; font-size:11px; font-weight:600; }\n.mapa-pin-valor{ color:#26c6da; font-size:13px; font-weight:700; margin-top:2px; }\n.mapa-pin.ambiental .mapa-pin-valor{ color:#ffab40; }\n.mapa-nota{ color:#6b7280; font-size:11px; margin-top:10px; }\n</style>\n\n<div class=\"mapa-wrap\">\n  <div class=\"mapa-toolbar\">\n    <div class=\"mapa-titulo\">Distribución de sensores en el área</div>\n    <div style=\"display:flex; gap:10px;\">\n      <div class=\"mapa-btn\" id=\"mapa-editar\">Editar posiciones</div>\n      <div class=\"mapa-btn guardar\" id=\"mapa-guardar\" style=\"display:none;\">Guardar cambios</div>\n    </div>\n  </div>\n\n  <div class=\"mapa-container\" id=\"mapa-container\">\n    <svg class=\"mapa-plano\" viewBox=\"0 0 260 760\" preserveAspectRatio=\"xMidYMid meet\">\n  <rect x=\"6\" y=\"6\" width=\"248\" height=\"744\" rx=\"3\" fill=\"none\" stroke=\"#3a3a44\" stroke-width=\"2.5\"/>\n  <line x1=\"130\" y1=\"26\" x2=\"130\" y2=\"716\" stroke=\"#26262e\" stroke-width=\"1\" stroke-dasharray=\"4 5\"/>\n\n  <rect x=\"34\" y=\"20\" width=\"192\" height=\"34\" rx=\"2\" fill=\"none\" stroke=\"#3a3a44\" stroke-width=\"1.4\"/>\n  <rect x=\"40\" y=\"24\" width=\"10\" height=\"6\" fill=\"#3a3a44\"/>\n  <rect x=\"210\" y=\"24\" width=\"10\" height=\"6\" fill=\"#3a3a44\"/>\n\n  <path d=\"M22 60 L22 118 L58 118 L58 100 L36 100 L36 60 Z\" fill=\"none\" stroke=\"#3a3a44\" stroke-width=\"1.4\"/>\n\n  <g fill=\"#161619\" stroke=\"#33333c\" stroke-width=\"1.2\">\n    <rect x=\"18\" y=\"60\" width=\"42\" height=\"98\" rx=\"3\"/>\n    <rect x=\"18\" y=\"168\" width=\"42\" height=\"108\" rx=\"3\"/>\n    <rect x=\"18\" y=\"352\" width=\"42\" height=\"108\" rx=\"3\"/>\n    <rect x=\"18\" y=\"470\" width=\"42\" height=\"98\" rx=\"3\"/>\n    <rect x=\"18\" y=\"578\" width=\"42\" height=\"90\" rx=\"3\"/>\n\n    <rect x=\"200\" y=\"60\" width=\"42\" height=\"98\" rx=\"3\"/>\n    <rect x=\"200\" y=\"168\" width=\"42\" height=\"108\" rx=\"3\"/>\n    <rect x=\"200\" y=\"352\" width=\"42\" height=\"108\" rx=\"3\"/>\n    <rect x=\"200\" y=\"470\" width=\"42\" height=\"98\" rx=\"3\"/>\n    <rect x=\"200\" y=\"578\" width=\"42\" height=\"90\" rx=\"3\"/>\n  </g>\n\n  <rect x=\"76\" y=\"66\" width=\"108\" height=\"600\" rx=\"10\" fill=\"none\" stroke=\"#2c2c34\" stroke-width=\"1.2\"/>\n  <line x1=\"76\" y1=\"410\" x2=\"184\" y2=\"410\" stroke=\"#2c2c34\" stroke-width=\"1.2\"/>\n  <g fill=\"#111114\" stroke=\"#2c2c34\" stroke-width=\"1\">\n    <rect x=\"90\" y=\"82\" width=\"30\" height=\"310\" rx=\"4\"/>\n    <rect x=\"140\" y=\"82\" width=\"30\" height=\"310\" rx=\"4\"/>\n    <rect x=\"90\" y=\"424\" width=\"30\" height=\"228\" rx=\"4\"/>\n    <rect x=\"140\" y=\"424\" width=\"30\" height=\"228\" rx=\"4\"/>\n  </g>\n\n  <g fill=\"none\" stroke=\"#33333c\" stroke-width=\"1.4\">\n    <circle cx=\"39\" cy=\"324\" r=\"16\"/>\n    <circle cx=\"221\" cy=\"324\" r=\"16\"/>\n  </g>\n\n  <g fill=\"none\" stroke=\"#33333c\" stroke-width=\"1.4\">\n    <rect x=\"22\" y=\"682\" width=\"76\" height=\"30\" rx=\"2\"/>\n    <rect x=\"162\" y=\"682\" width=\"76\" height=\"30\" rx=\"2\"/>\n  </g>\n  <path d=\"M116 682 L116 730 M144 682 L144 730 M110 730 L150 730\" stroke=\"#33333c\" stroke-width=\"1.4\"/>\n\n  <text x=\"130\" y=\"748\" text-anchor=\"middle\" fill=\"#5c636d\" font-size=\"12\" font-family=\"Arial\" letter-spacing=\"1\">INGRESO</text>\n</svg>\n  </div>\n\n  <div class=\"mapa-nota\" id=\"mapa-nota\">Los pines muestran la última lectura de cada sensor. Activa \"Editar posiciones\" para reacomodarlos si no coinciden con la ubicación real.</div>\n</div>\n\n<script>\n(function(scope){\n\n  var contenedor = document.getElementById('mapa-container');\n  var btnEditar = document.getElementById('mapa-editar');\n  var btnGuardar = document.getElementById('mapa-guardar');\n\n  var posiciones = {};\n  var valores = {};\n  var editando = false;\n  var arrastrando = null;\n\n  var nombres = { 1:'Sensor 1', 2:'Sensor 2', 3:'Sensor 3', 4:'Sensor 4', 5:'Sensor 5', 6:'Sensor 6', ambiental:'Sensor Ambiental' };\n\n  function valorTexto(id){\n    if (id === 'ambiental') {\n      var v = valores.ambiental;\n      if (!v || v.temperatura === undefined) return '--';\n      return v.temperatura.toFixed(1) + '°C / ' + (v.humedad !== undefined ? v.humedad.toFixed(0) : '--') + '%';\n    }\n    var h = valores[id];\n    return (typeof h === 'number') ? h.toFixed(1) + '%' : '--';\n  }\n\n  function render(){\n    // Quito pines viejos, dejo la imagen\n    Array.from(contenedor.querySelectorAll('.mapa-pin')).forEach(function(p){ p.remove(); });\n\n    Object.keys(posiciones).forEach(function(id){\n      var pos = posiciones[id];\n      var esAmbiental = id === 'ambiental';\n      var pin = document.createElement('div');\n      pin.className = 'mapa-pin ' + (esAmbiental ? 'ambiental' : 'sustrato') + (editando ? ' editando' : '');\n      pin.style.left = pos.x + '%';\n      pin.style.top = pos.y + '%';\n      pin.dataset.id = id;\n      pin.innerHTML = '<div class=\"mapa-pin-dot\"></div>' +\n        '<div class=\"mapa-pin-card\"><div class=\"mapa-pin-nombre\">' + nombres[id] + '</div>' +\n        '<div class=\"mapa-pin-valor\">' + valorTexto(id) + '</div></div>';\n\n      pin.addEventListener('mousedown', function(e){ iniciarArrastre(e, id); });\n      pin.addEventListener('touchstart', function(e){ iniciarArrastre(e.touches[0], id); e.preventDefault(); }, { passive:false });\n\n      contenedor.appendChild(pin);\n    });\n  }\n\n  function iniciarArrastre(e, id){\n    if (!editando) return;\n    arrastrando = id;\n    var pin = contenedor.querySelector('.mapa-pin[data-id=\"' + id + '\"]');\n    if (pin) pin.classList.add('arrastrando');\n  }\n\n  function moverArrastre(clientX, clientY){\n    if (!arrastrando) return;\n    var rect = contenedor.getBoundingClientRect();\n    var x = ((clientX - rect.left) / rect.width) * 100;\n    var y = ((clientY - rect.top) / rect.height) * 100;\n    x = Math.min(Math.max(x, 0), 100);\n    y = Math.min(Math.max(y, 0), 100);\n    posiciones[arrastrando] = { x: x, y: y };\n    var pin = contenedor.querySelector('.mapa-pin[data-id=\"' + arrastrando + '\"]');\n    if (pin) { pin.style.left = x + '%'; pin.style.top = y + '%'; }\n  }\n\n  document.addEventListener('mousemove', function(e){ moverArrastre(e.clientX, e.clientY); });\n  document.addEventListener('touchmove', function(e){\n    if (arrastrando) { moverArrastre(e.touches[0].clientX, e.touches[0].clientY); e.preventDefault(); }\n  }, { passive:false });\n\n  function soltarArrastre(){\n    if (arrastrando) {\n      var pin = contenedor.querySelector('.mapa-pin[data-id=\"' + arrastrando + '\"]');\n      if (pin) pin.classList.remove('arrastrando');\n      arrastrando = null;\n    }\n  }\n  document.addEventListener('mouseup', soltarArrastre);\n  document.addEventListener('touchend', soltarArrastre);\n\n  btnEditar.onclick = function(){\n    editando = !editando;\n    btnEditar.classList.toggle('activo', editando);\n    btnEditar.textContent = editando ? 'Editando (arrastra los pines)' : 'Editar posiciones';\n    btnGuardar.style.display = editando ? 'block' : 'none';\n    render();\n  };\n\n  btnGuardar.onclick = function(){\n    scope.send({ payload: { tipo: 'guardar', posiciones: posiciones } });\n    editando = false;\n    btnEditar.classList.remove('activo');\n    btnEditar.textContent = 'Editar posiciones';\n    btnGuardar.style.display = 'none';\n    render();\n  };\n\n  scope.$watch('msg', function(msg){\n    if (!msg || !msg.payload) return;\n    // Mientras estoy editando, ignoro las actualizaciones automáticas de posición\n    // (si no, el refresco de cada 15s me borraría el arrastre a medio hacer).\n    // Los valores de humedad sí los sigo actualizando, esos no estorban.\n    if (msg.payload.posiciones && !editando) posiciones = msg.payload.posiciones;\n    if (msg.payload.valores) valores = msg.payload.valores;\n    render();\n  });\n\n})(scope);\n</script>",
+        "storeOutMessages": true,
+        "fwdInMessages": false,
+        "resendOnRefresh": true,
+        "templateScope": "local",
+        "className": "",
+        "x": 2980,
+        "y": 760,
+        "wires": [
+            [
+                "mapa_fn_guardar"
+            ]
+        ]
+    },
+    {
+        "id": "group_mapa_v2",
+        "type": "ui_group",
+        "name": "Mapa de Sensores",
+        "tab": "tab_mapa_v2",
+        "order": 1,
+        "disp": false,
+        "width": 24,
+        "collapse": false
+    },
+    {
+        "id": "tab_mapa_v2",
+        "type": "ui_tab",
+        "name": "Mapa de Sensores",
+        "icon": "dashboard",
+        "order": 6,
+        "disabled": false,
+        "hidden": false
+    },
+    {
+        "id": "fff4a2defe2a467b",
+        "type": "group",
+        "z": "2ac18697561110b7",
+        "style": {
+            "stroke": "#999999",
+            "stroke-opacity": "1",
+            "fill": "none",
+            "fill-opacity": "1",
+            "label": true,
+            "label-position": "nw",
+            "color": "#a4a4a4"
+        },
+        "nodes": [
+            "alert-inject",
+            "alert-check",
+            "telegram-send",
+            "e1cbe4db864c26f8"
+        ],
+        "x": 2134,
+        "y": 1059,
+        "w": 662,
+        "h": 162
+    },
+    {
+        "id": "alert-inject",
+        "type": "inject",
+        "z": "2ac18697561110b7",
+        "g": "fff4a2defe2a467b",
+        "name": "Simular alerta",
+        "props": [
+            {
+                "p": "payload"
+            }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": 0.1,
+        "topic": "",
+        "payload": "{\"sensor\":1,\"humedad\":15}",
+        "payloadType": "json",
+        "x": 2250,
+        "y": 1180,
+        "wires": [
+            [
+                "alert-check"
+            ]
+        ]
+    },
+    {
+        "id": "alert-check",
+        "type": "function",
+        "z": "2ac18697561110b7",
+        "g": "fff4a2defe2a467b",
+        "name": "Chequear umbral",
+        "func": "const humedad = msg.payload.humedad;\nconst sensor = msg.payload.sensor;\nconst UMBRAL_MIN = 20;\n\nif (humedad < UMBRAL_MIN) {\n    msg.payload = {\n        chatId: 8444938703,\n        type: \"message\",\n        content: `⚠️ Alerta: Sensor ${sensor} en ${humedad}% (bajo umbral de ${UMBRAL_MIN}%)`\n    };\n    return msg;\n}\nreturn null;",
+        "outputs": 1,
+        "timeout": "",
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 2480,
+        "y": 1180,
+        "wires": [
+            [
+                "telegram-send"
+            ]
+        ]
+    },
+    {
+        "id": "telegram-send",
+        "type": "telegram sender",
+        "z": "2ac18697561110b7",
+        "g": "fff4a2defe2a467b",
+        "name": "Enviar alerta",
+        "bot": "2b39adfda190bd9e",
+        "haserroroutput": false,
+        "outputs": 1,
+        "x": 2700,
+        "y": 1180,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "e1cbe4db864c26f8",
+        "type": "comment",
+        "z": "2ac18697561110b7",
+        "g": "fff4a2defe2a467b",
+        "name": "Enviar alertas a telegram",
+        "info": "",
+        "x": 2270,
+        "y": 1100,
+        "wires": []
+    },
+    {
+        "id": "2b39adfda190bd9e",
+        "type": "telegram bot",
+        "botname": "Orquideario UVG Alertas",
+        "usernames": "",
+        "chatids": "8444938703",
+        "baseapiurl": "",
+        "testenvironment": false,
+        "updatemode": "polling",
+        "pollinterval": 300,
+        "usesocks": false,
+        "sockshost": "",
+        "socksprotocol": "socks5",
+        "socksport": 6667,
+        "socksusername": "anonymous",
+        "sockspassword": "",
+        "bothost": "",
+        "botpath": "",
+        "localbothost": "0.0.0.0",
+        "localbotport": 8443,
+        "publicbotport": 8443,
+        "privatekey": "",
+        "certificate": "",
+        "useselfsignedcertificate": false,
+        "sslterminated": false,
+        "verboselogging": false
+    },
+    {
+        "id": "b9e2666b911eb5c4",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-dashboard": "3.6.6",
+            "node-red-node-ui-table": "0.4.5",
+            "node-red-node-email": "5.2.4",
+            "node-red-contrib-telegrambot": "19.0.2"
+        }
+    }
+]
