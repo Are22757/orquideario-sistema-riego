@@ -1,13 +1,12 @@
-# orquideario-sistema-riego
-Sistema de riego automatizado - Orquideario UVG
+# Sistema de riego automatizado - Orquideario UVG
 
 Sistema de control de riego automatizado para el Orquideario del Jardín Botánico de la Universidad del Valle de Guatemala. Proyecto de graduación de Ingeniería Electrónica, implementado como prototipo a escala de laboratorio.
 
-**Descripción**
+## Descripción
 
 El sistema mide la humedad del sustrato con seis sensores inalámbricos LoRa y activa el riego cuando la humedad promedio baja del límite configurado. También mide la temperatura y la humedad del ambiente, que solo generan alertas y no activan el riego.
 
-**Funcionamiento general:**
+Funcionamiento general:
 
 1. Los sensores de humedad del sustrato envían sus lecturas por LoRa al nodo de adquisición.
 2. El nodo de adquisición lee el sensor ambiental por Modbus RTU sobre RS485 y reenvía todos los datos por LoRa al tablero de automatización.
@@ -66,4 +65,9 @@ Antes de cargar el firmware del tablero de automatización, completar en heltec_
 - WIFI_PASSWORD: contraseña de la red
 - MQTT_BROKER: dirección IP de la computadora donde corre Node-RED
 
-En Node-RED se deben configurar el token del bot y el chat ID de Telegram, y las
+En Node-RED se deben configurar el token del bot y el chat ID de Telegram, y las credenciales del correo en el nodo de envío. Estas credenciales no se incluyen en el repositorio.
+
+## Autora
+
+Lisbeth Arévalo
+Ingeniería Electrónica, Universidad del Valle de Guatemala, 2026
